@@ -1,7 +1,10 @@
 const PAN_STEP = 120;
 
-function postMessage(message) {
-  parent.postMessage({ pluginMessage: message }, "*");
+function sendToPlugin(message) {
+  if (window.parent === window) {
+    return;
+  }
+  window.parent.postMessage({ pluginMessage: message }, "*");
 }
 
 // Connection check.
@@ -23,10 +26,15 @@ window.addEventListener("message", (event) => {
 });
 
 setConnected(false);
-setInterval(() => {
-  if (!connected) postMessage({ type: "PING" });
-}, 1000);
-postMessage({ type: "PING" });
+if (window.parent !== window) {
+  setInterval(() => {
+    if (!connected) sendToPlugin({ type: "PING" });
+  }, 1000);
+  sendToPlugin({ type: "PING" });
+} else {
+  setConnected(false);
+  if (connText) connText.textContent = "Not embedded (preview mode)";
+}
 
 // Gestures toggle (UI-only).
 const gestureToggle = document.getElementById("enable-gestures");
@@ -50,7 +58,7 @@ panButtons.forEach((button) => {
     if (dir === "down") dy = PAN_STEP;
     if (dir === "left") dx = -PAN_STEP;
     if (dir === "right") dx = PAN_STEP;
-    postMessage({ type: "PAN", dx, dy });
+    sendToPlugin({ type: "PAN", dx, dy });
   });
 });
 
@@ -60,7 +68,7 @@ const zoomSet = document.getElementById("zoom-set");
 if (zoomInput && zoomSet) {
   zoomSet.addEventListener("click", () => {
     const zoom = Number(zoomInput.value) || 1;
-    postMessage({ type: "ZOOM", zoom });
+    sendToPlugin({ type: "ZOOM", zoom });
   });
 }
 
@@ -69,11 +77,11 @@ const stickerUp = document.getElementById("sticker-up");
 const stickerDown = document.getElementById("sticker-down");
 
 stickerUp && stickerUp.addEventListener("click", () => {
-  postMessage({ type: "STICKER", kind: "up" });
+  sendToPlugin({ type: "STICKER", kind: "up" });
 });
 
 stickerDown && stickerDown.addEventListener("click", () => {
-  postMessage({ type: "STICKER", kind: "down" });
+  sendToPlugin({ type: "STICKER", kind: "down" });
 });
 
 // Camera preview + canvas overlay.
