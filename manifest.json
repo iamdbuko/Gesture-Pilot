@@ -12,7 +12,7 @@
   ],
   "networkAccess": {
     "allowedDomains": [
-      "mydomain.com"
+      "https://gesture-pilot.vercel.app"
     ]
   }
 }

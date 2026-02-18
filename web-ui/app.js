@@ -80,6 +80,8 @@ stickerDown && stickerDown.addEventListener("click", () => {
 const video = document.getElementById("camera-video");
 const canvas = document.getElementById("camera-canvas");
 const cameraError = document.getElementById("camera-error");
+const cameraDiag = document.getElementById("camera-diagnostic");
+const cameraStart = document.getElementById("camera-start");
 
 if (video && canvas && cameraError) {
   const ctx = canvas.getContext("2d");
@@ -126,5 +128,13 @@ if (video && canvas && cameraError) {
     }
   };
 
+  if (cameraDiag) {
+    const secure = window.isSecureContext ? "secure" : "not secure";
+    const hasMediaDevices = !!navigator.mediaDevices;
+    cameraDiag.textContent = `Context: ${secure}. mediaDevices: ${hasMediaDevices ? "yes" : "no"}.`;
+  }
+
+  cameraStart && cameraStart.addEventListener("click", () => startCamera());
+  // Try auto-start, but browsers may require a user gesture.
   startCamera();
 }
