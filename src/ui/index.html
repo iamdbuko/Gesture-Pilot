@@ -26,6 +26,7 @@
         if (pluginId) {
           baseUrl += (baseUrl.indexOf("?") >= 0 ? "&" : "?") + "pluginId=" + encodeURIComponent(pluginId);
         }
+        baseUrl += (baseUrl.indexOf("?") >= 0 ? "&" : "?") + "v=1";
         window.location.href = baseUrl;
       })();
     </script>
