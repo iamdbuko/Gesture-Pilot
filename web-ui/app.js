@@ -1,17 +1,13 @@
 const PAN_STEP = 120;
 
 const params = new URLSearchParams(window.location.search);
-const pluginId = params.get("pluginId");
+const pluginId = params.get("pluginId") || "*";
 
 function sendToPlugin(message) {
   if (window.parent === window) {
     return;
   }
-  if (pluginId) {
-    window.parent.postMessage({ pluginMessage: message, pluginId }, "*");
-  } else {
-    window.parent.postMessage({ pluginMessage: message }, "*");
-  }
+  window.parent.postMessage({ pluginMessage: message, pluginId }, "*");
 }
 
 // Connection check.
