@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gesture Pilot</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: system-ui, -apple-system, sans-serif;
+      }
+      .hint {
+        font-size: 12px;
+        color: #555;
+      }
+    </style>
+  </head>
+  <body>
+    <p class="hint">Redirecting to hosted UI…</p>
+    <script>
+      (function () {
+        var baseUrl = "https://mydomain.com/gesture-ui";
+        var params = new URLSearchParams(window.location.search);
+        var pluginId = params.get("pluginId");
+        if (pluginId) {
+          baseUrl += (baseUrl.indexOf("?") >= 0 ? "&" : "?") + "pluginId=" + encodeURIComponent(pluginId);
+        }
+        window.location.href = baseUrl;
+      })();
+    </script>
+  </body>
+</html>

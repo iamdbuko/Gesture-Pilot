@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gesture Pilot UI</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "Inter", system-ui, -apple-system, sans-serif;
+      }
+      body {
+        margin: 0;
+        padding: 16px;
+        background: #f7f7fb;
+        color: #1c1c1f;
+      }
+      h1 {
+        font-size: 16px;
+        margin: 0 0 12px;
+      }
+      .panel {
+        background: #ffffff;
+        border-radius: 12px;
+        padding: 12px;
+        box-shadow: 0 6px 18px rgba(22, 22, 28, 0.08);
+        margin-bottom: 12px;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      button {
+        border: none;
+        border-radius: 8px;
+        padding: 8px 12px;
+        background: #2b2f38;
+        color: #ffffff;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      button.secondary {
+        background: #e5e7ef;
+        color: #1c1c1f;
+      }
+      label {
+        font-size: 12px;
+      }
+      input[type="number"] {
+        width: 96px;
+        padding: 6px 8px;
+        border-radius: 8px;
+        border: 1px solid #d7d9e2;
+        font-size: 12px;
+      }
+      .toggle {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .subtle {
+        font-size: 11px;
+        color: #5b5f6b;
+      }
+      .camera {
+        position: relative;
+        width: 100%;
+        margin-top: 8px;
+        border-radius: 12px;
+        overflow: hidden;
+        background: #121318;
+        aspect-ratio: 4 / 3;
+      }
+      #camera-video,
+      #camera-canvas {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        color: #5b5f6b;
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: #d0d3dc;
+      }
+      .dot.ok {
+        background: #30b95a;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Gesture Pilot</h1>
+
+    <div class="panel">
+      <div class="status">
+        <span class="dot" id="conn-dot"></span>
+        <span id="conn-text">Connecting…</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="toggle">
+        <input id="enable-gestures" type="checkbox" />
+        <label for="enable-gestures">Enable gestures</label>
+      </div>
+      <p class="subtle" id="gesture-status">Gestures disabled</p>
+    </div>
+
+    <div class="panel">
+      <label>Camera preview</label>
+      <div class="camera">
+        <video id="camera-video" autoplay playsinline muted></video>
+        <canvas id="camera-canvas"></canvas>
+      </div>
+      <p class="subtle" id="camera-error" hidden></p>
+    </div>
+
+    <div class="panel">
+      <label>Pan</label>
+      <div class="row" style="margin-top: 8px;">
+        <button data-pan="up">Up</button>
+        <button data-pan="down">Down</button>
+        <button data-pan="left">Left</button>
+        <button data-pan="right">Right</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <label>Zoom</label>
+      <div class="row" style="margin-top: 8px; align-items: center;">
+        <input id="zoom-value" type="number" step="0.1" min="0.1" max="6" value="1" />
+        <button id="zoom-set">Set zoom</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <label>Sticker</label>
+      <div class="row" style="margin-top: 8px;">
+        <button id="sticker-up" class="secondary">Thumbs up</button>
+        <button id="sticker-down" class="secondary">Thumbs down</button>
+      </div>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
