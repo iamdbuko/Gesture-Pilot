@@ -1,6 +1,6 @@
 const PAN_STEP = 120;
 
-const RELAY_BASE_URL = "https://your-relay.vercel.app";
+const RELAY_BASE_URL = "https://gesture-pilot-relay.vercel.app";
 
 // Relay status.
 const connDot = document.getElementById("conn-dot");
