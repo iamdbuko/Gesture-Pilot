@@ -145,7 +145,7 @@ async function relayConnect(baseUrl: string, sessionId: string, secret: string) 
     pollToken: Date.now(),
   };
 
-  setRelayStatus(true, "Connected");
+  setRelayStatus(true, `Connected (${sessionId})`);
   setRelayError("—");
 
   const poll = async (token: number) => {
@@ -165,6 +165,7 @@ async function relayConnect(baseUrl: string, sessionId: string, secret: string) 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Relay pull failed");
       const commands = Array.isArray(data.commands) ? data.commands : [];
+      setRelayStatus(true, `Connected (${relayState.sessionId})`);
       for (const cmd of commands) {
         await handleRelayCommand(cmd);
       }

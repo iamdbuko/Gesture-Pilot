@@ -243,12 +243,12 @@ async function flushQueue() {
       throw new Error(data.error || `push failed (${res.status})`);
     }
     setConnected(true);
-    if (relayLastPush) relayLastPush.textContent = `Last push: ok (${batch.length})`;
+    if (relayLastPush) relayLastPush.textContent = `Last push: ok (${batch.length}) [${sessionId}]`;
     setRelayError("");
   } catch (error) {
     setConnected(false);
     setRelayError("Relay push failed. Check relay status.");
-    if (relayLastPush) relayLastPush.textContent = "Last push: error";
+    if (relayLastPush) relayLastPush.textContent = `Last push: error [${sessionId}]`;
     console.warn("Relay push error:", error);
   } finally {
     flushing = false;
