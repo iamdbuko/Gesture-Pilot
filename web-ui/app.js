@@ -79,9 +79,29 @@ const badgeIndexOnly = document.getElementById("badge-indexonly");
 const badgeZoom2H = document.getElementById("badge-zoom2h");
 const panSlider = document.getElementById("pan-sensitivity");
 const panValue = document.getElementById("pan-sensitivity-value");
+const trackpadModeSelect = document.getElementById("trackpad-mode");
+const clutchDelayInput = document.getElementById("clutch-delay");
+const clutchDelayValue = document.getElementById("clutch-delay-value");
+const deadzoneInput = document.getElementById("deadzone");
+const deadzoneValue = document.getElementById("deadzone-value");
+const emaAlphaInput = document.getElementById("ema-alpha");
+const emaAlphaValue = document.getElementById("ema-alpha-value");
+const speedGainInput = document.getElementById("speed-gain");
+const speedGainValue = document.getElementById("speed-gain-value");
+const maxGainInput = document.getElementById("max-gain");
+const maxGainValue = document.getElementById("max-gain-value");
+const activeRadiusInput = document.getElementById("active-radius");
+const activeRadiusValue = document.getElementById("active-radius-value");
 
 let gesturesEnabled = false;
 let panSensitivity = 1.2;
+let trackpadMode = "v1";
+let clutchDelayMs = 250;
+let deadzone = 1.5;
+let emaAlpha = 0.22;
+let speedGain = 0.03;
+let maxGain = 3.0;
+let activeRadiusPx = 90;
 
 function updateGestureStatus() {
   if (gestureStatus) {
@@ -126,6 +146,54 @@ if (panSlider && panValue) {
   panSlider.addEventListener("input", () => {
     panSensitivity = Number(panSlider.value) || 1.0;
     panValue.textContent = panSensitivity.toFixed(1);
+  });
+}
+
+if (trackpadModeSelect) {
+  trackpadModeSelect.addEventListener("change", () => {
+    trackpadMode = trackpadModeSelect.value === "v2" ? "v2" : "v1";
+  });
+}
+
+if (clutchDelayInput && clutchDelayValue) {
+  clutchDelayInput.addEventListener("input", () => {
+    clutchDelayMs = Number(clutchDelayInput.value) || 250;
+    clutchDelayValue.textContent = String(clutchDelayMs);
+  });
+}
+
+if (deadzoneInput && deadzoneValue) {
+  deadzoneInput.addEventListener("input", () => {
+    deadzone = Number(deadzoneInput.value) || 0;
+    deadzoneValue.textContent = deadzone.toFixed(1);
+  });
+}
+
+if (emaAlphaInput && emaAlphaValue) {
+  emaAlphaInput.addEventListener("input", () => {
+    emaAlpha = Number(emaAlphaInput.value) || 0.2;
+    emaAlphaValue.textContent = emaAlpha.toFixed(2);
+  });
+}
+
+if (speedGainInput && speedGainValue) {
+  speedGainInput.addEventListener("input", () => {
+    speedGain = Number(speedGainInput.value) || 0.03;
+    speedGainValue.textContent = speedGain.toFixed(3);
+  });
+}
+
+if (maxGainInput && maxGainValue) {
+  maxGainInput.addEventListener("input", () => {
+    maxGain = Number(maxGainInput.value) || 3.0;
+    maxGainValue.textContent = maxGain.toFixed(2);
+  });
+}
+
+if (activeRadiusInput && activeRadiusValue) {
+  activeRadiusInput.addEventListener("input", () => {
+    activeRadiusPx = Number(activeRadiusInput.value) || 90;
+    activeRadiusValue.textContent = String(Math.round(activeRadiusPx));
   });
 }
 
@@ -256,6 +324,9 @@ let zoom0 = 1.0;
 let thumbsHoldAt = 0;
 let thumbsCandidate = "none";
 let lastThumbsAt = { up: 0, down: 0 };
+let panEngaged = false;
+let lastIndexSeenAt = 0;
+let activeOrigin = null;
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
@@ -508,6 +579,7 @@ function handleGestures(landmarksList, handednessList, width, height) {
       !isFingerExtended(rightHand, 20, 18);
     setBadgeActive(badgeIndexOnly, indexOnly);
     if (indexOnly) {
+      lastIndexSeenAt = now;
       if (!panEnterAt) panEnterAt = now;
     } else {
       panEnterAt = 0;
@@ -522,25 +594,45 @@ function handleGestures(landmarksList, handednessList, width, height) {
       if (mode !== "PAN") {
         mode = "PAN";
         modeSince = now;
+        panEngaged = true;
+        smoothedIndex = null;
+        activeOrigin = null;
       }
       if (!indexOnly && panExitAt && now - panExitAt >= 100) {
         mode = "IDLE";
         setMode("IDLE");
+        panEngaged = false;
         return;
       }
 
       const tip = rightHand[8];
       const prev = smoothedIndex;
-      const next = ema(smoothedIndex, { x: tip.x, y: tip.y }, 0.22);
+      const next = ema(smoothedIndex, { x: tip.x, y: tip.y }, emaAlpha);
       smoothedIndex = next;
+      if (trackpadMode === "v2") {
+        if (!activeOrigin && next) {
+          activeOrigin = { x: next.x, y: next.y };
+        }
+      }
+
       if (prev && next && now - lastPanAt >= 50) {
         let dx = (next.x - prev.x) * width;
         let dy = (next.y - prev.y) * height;
+
+        if (trackpadMode === "v2" && activeOrigin) {
+          const ox = (next.x - activeOrigin.x) * width;
+          const oy = (next.y - activeOrigin.y) * height;
+          const dist = Math.hypot(ox, oy);
+          if (dist > activeRadiusPx) {
+            return;
+          }
+        }
+
         const speed = Math.hypot(dx, dy);
-        const gain = clamp(0.6 + speed * 0.03, 0.6, 3.0);
+        const gain = clamp(0.6 + speed * speedGain, 0.6, maxGain);
         dx = dx * panSensitivity * gain;
         dy = dy * panSensitivity * gain;
-        if (Math.abs(dx) + Math.abs(dy) >= 1.5) {
+        if (Math.abs(dx) + Math.abs(dy) >= deadzone) {
           dx = clamp(dx, -30, 30);
           dy = clamp(dy, -30, 30);
           emitCommand({ type: "PAN", dx, dy }, `PAN ${dx.toFixed(1)}, ${dy.toFixed(1)}`);
@@ -556,6 +648,7 @@ function handleGestures(landmarksList, handednessList, width, height) {
   // Thumbs temporarily disabled.
 
   setZoomDebug("—", "—");
+  setBadgeActive(badgeIndexOnly, false);
   setBadgeActive(badgeZoom2H, false);
   setMode("IDLE");
 }
