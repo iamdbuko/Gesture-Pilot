@@ -14,7 +14,7 @@
     "allowedDomains": [
       "https://gesture-pilot.vercel.app",
       "https://gesture-pilot-relay.vercel.app",
-      "https://YOUR-RENDER.onrender.com"
+      "https://gesture-pilot.onrender.com"
     ]
   }
 }

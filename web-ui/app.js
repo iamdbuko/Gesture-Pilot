@@ -1,7 +1,7 @@
 import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
 
 const RELAY_BASE_URL = "https://gesture-pilot-relay.vercel.app";
-const WS_RELAY_URL = "wss://YOUR-RENDER.onrender.com";
+const WS_RELAY_URL = "wss://gesture-pilot.onrender.com";
 const PAN_STEP = 120;
 
 // Relay status.
