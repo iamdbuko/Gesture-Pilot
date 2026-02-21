@@ -170,6 +170,14 @@
         <span id="pan-sensitivity-value" class="subtle">2.0</span>
       </div>
       <div class="row" style="margin-top: 8px; align-items: center;">
+        <label for="profile" class="subtle">Profile</label>
+        <select id="profile">
+          <option value="linear">Trackpad Linear</option>
+          <option value="accelerated" selected>Trackpad Accelerated</option>
+          <option value="inertial">Touch Inertial</option>
+        </select>
+      </div>
+      <div class="row" style="margin-top: 8px; align-items: center;">
         <label for="clutch-delay" class="subtle">Clutch delay (ms)</label>
         <input id="clutch-delay" type="range" min="50" max="800" step="25" value="200" />
         <span id="clutch-delay-value" class="subtle">200</span>

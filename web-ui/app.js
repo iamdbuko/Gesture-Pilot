@@ -92,6 +92,7 @@ const maxGainInput = document.getElementById("max-gain");
 const maxGainValue = document.getElementById("max-gain-value");
 const yBoostInput = document.getElementById("y-boost");
 const yBoostValue = document.getElementById("y-boost-value");
+const profileSelect = document.getElementById("profile");
 
 let gesturesEnabled = false;
 let panSensitivity = 1.2;
@@ -102,6 +103,7 @@ let speedGain = 0.12;
 let maxGain = 30.0;
 let yBoost = 1.4;
 let activeRadiusPx = 90;
+let profile = "accelerated";
 
 function updateGestureStatus() {
   if (gestureStatus) {
@@ -146,6 +148,63 @@ if (panSlider && panValue) {
   panSlider.addEventListener("input", () => {
     panSensitivity = Number(panSlider.value) || 1.0;
     panValue.textContent = panSensitivity.toFixed(1);
+  });
+}
+
+function applyProfile(nextProfile) {
+  profile = nextProfile;
+  if (profile === "linear") {
+    panSensitivity = 1.6;
+    deadzone = 0.4;
+    emaAlpha = 0.35;
+    speedGain = 0.04;
+    maxGain = 6.0;
+    yBoost = 1.3;
+  } else if (profile === "accelerated") {
+    panSensitivity = 2.0;
+    deadzone = 0.5;
+    emaAlpha = 0.15;
+    speedGain = 0.12;
+    maxGain = 30.0;
+    yBoost = 2.5;
+  } else {
+    panSensitivity = 1.4;
+    deadzone = 0.3;
+    emaAlpha = 0.25;
+    speedGain = 0.08;
+    maxGain = 20.0;
+    yBoost = 1.6;
+  }
+
+  if (panSlider && panValue) {
+    panSlider.value = String(panSensitivity);
+    panValue.textContent = panSensitivity.toFixed(1);
+  }
+  if (deadzoneInput && deadzoneValue) {
+    deadzoneInput.value = String(deadzone);
+    deadzoneValue.textContent = deadzone.toFixed(1);
+  }
+  if (emaAlphaInput && emaAlphaValue) {
+    emaAlphaInput.value = String(emaAlpha);
+    emaAlphaValue.textContent = emaAlpha.toFixed(2);
+  }
+  if (speedGainInput && speedGainValue) {
+    speedGainInput.value = String(speedGain);
+    speedGainValue.textContent = speedGain.toFixed(3);
+  }
+  if (maxGainInput && maxGainValue) {
+    maxGainInput.value = String(maxGain);
+    maxGainValue.textContent = maxGain.toFixed(2);
+  }
+  if (yBoostInput && yBoostValue) {
+    yBoostInput.value = String(yBoost);
+    yBoostValue.textContent = yBoost.toFixed(1);
+  }
+}
+
+if (profileSelect) {
+  profileSelect.addEventListener("change", () => {
+    applyProfile(profileSelect.value);
   });
 }
 
@@ -197,6 +256,7 @@ setMode("IDLE");
 setHands(0);
 setHandedness("—");
 setZoomDebug("—", "—");
+applyProfile(profile);
 
 // Relay queue + batching (max 20 req/s).
 const queue = [];
@@ -638,9 +698,14 @@ function handleGestures(landmarksList, handednessList, width, height) {
         let dy = (next.y - prev.y) * height * yBoost;
 
         const speed = Math.hypot(dx, dy);
-        // Stronger acceleration curve for fast moves.
-        const accel = 1 + Math.pow(speed, 1.7) * speedGain * 2000;
-        const gain = clamp(accel, 0.4, maxGain);
+        let gain = 1;
+        if (profile === "linear") {
+          gain = clamp(0.8 + speed * speedGain * 40, 0.5, maxGain);
+        } else if (profile === "accelerated") {
+          gain = clamp(1 + Math.pow(speed, 1.7) * speedGain * 2000, 0.4, maxGain);
+        } else {
+          gain = clamp(0.7 + Math.pow(speed, 2.1) * speedGain * 900, 0.4, maxGain);
+        }
         dx = dx * panSensitivity * gain;
         dy = -dy * panSensitivity * gain;
         if (Math.abs(dx) + Math.abs(dy) >= deadzone) {
