@@ -98,8 +98,8 @@ let panSensitivity = 1.2;
 let clutchDelayMs = 250;
 let deadzone = 1.5;
 let emaAlpha = 0.22;
-let speedGain = 0.03;
-let maxGain = 20.0;
+let speedGain = 0.12;
+let maxGain = 30.0;
 let yBoost = 1.4;
 let activeRadiusPx = 90;
 
@@ -639,7 +639,7 @@ function handleGestures(landmarksList, handednessList, width, height) {
 
         const speed = Math.hypot(dx, dy);
         // Stronger acceleration curve for fast moves.
-        const accel = 1 + speed * speedGain * 1000;
+        const accel = 1 + Math.pow(speed, 1.7) * speedGain * 2000;
         const gain = clamp(accel, 0.4, maxGain);
         dx = dx * panSensitivity * gain;
         dy = dy * panSensitivity * gain;
