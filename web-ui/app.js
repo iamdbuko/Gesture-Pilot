@@ -596,7 +596,8 @@ function handleGestures(landmarksList, handednessList, width, height) {
       const s = maxMinArea(rightHand) || 1;
       const ratioRaw = clamp(zoomS0 / s, 0.1, 10);
       zoomRatioEma = 0.7 * zoomRatioEma + 0.3 * ratioRaw;
-      if (Math.abs(zoomRatioEma - 1) > 0.02) {
+      // Only emit zoom when size change is meaningful (deadzone).
+      if (Math.abs(zoomRatioEma - 1) > 0.03) {
         const targetZoom = clamp(zoom0 * zoomRatioEma, 0.1, 6.0);
         localZoom = targetZoom;
         emitCommand({ type: "ZOOM", zoom: targetZoom }, `ZOOM ${targetZoom.toFixed(2)}`);
