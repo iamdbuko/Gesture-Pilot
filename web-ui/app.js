@@ -71,6 +71,9 @@ const gestureToggle = document.getElementById("enable-gestures");
 const gestureStatus = document.getElementById("gesture-status");
 const gestureMode = document.getElementById("gesture-mode");
 const gestureArmed = document.getElementById("gesture-armed");
+const gestureHands = document.getElementById("gesture-hands");
+const gestureDebug = document.getElementById("gesture-debug");
+const gestureLast = document.getElementById("gesture-last");
 const panSlider = document.getElementById("pan-sensitivity");
 const panValue = document.getElementById("pan-sensitivity-value");
 
@@ -92,6 +95,18 @@ function setArmed(value) {
     gestureArmed.textContent = `ARMED: ${value ? "ON" : "OFF"}`;
     gestureArmed.classList.toggle("armed-on", value);
   }
+}
+
+function setHands(count) {
+  if (gestureHands) gestureHands.textContent = `Hands: ${count}`;
+}
+
+function setDebug(text) {
+  if (gestureDebug) gestureDebug.textContent = text;
+}
+
+function setLastCommand(text) {
+  if (gestureLast) gestureLast.textContent = `Last cmd: ${text}`;
 }
 
 if (gestureToggle) {
@@ -129,6 +144,16 @@ function enqueueSticker(command) {
   if (now - lastStickerAt < 1500) return;
   lastStickerAt = now;
   enqueueCommand(command);
+}
+
+function emitCommand(command, label) {
+  enqueueCommand(command);
+  if (label) setLastCommand(label);
+}
+
+function emitSticker(command, label) {
+  enqueueSticker(command);
+  if (label) setLastCommand(label);
 }
 
 async function flushQueue() {
@@ -172,7 +197,7 @@ panButtons.forEach((button) => {
     if (dir === "down") dy = PAN_STEP;
     if (dir === "left") dx = -PAN_STEP;
     if (dir === "right") dx = PAN_STEP;
-    enqueueCommand({ type: "PAN", dx, dy });
+    emitCommand({ type: "PAN", dx, dy }, `PAN ${dx.toFixed(1)}, ${dy.toFixed(1)}`);
   });
 });
 
@@ -184,7 +209,7 @@ if (zoomInput && zoomSet) {
   zoomSet.addEventListener("click", () => {
     const zoom = Number(zoomInput.value) || 1;
     localZoom = zoom;
-    enqueueCommand({ type: "ZOOM", zoom });
+    emitCommand({ type: "ZOOM", zoom }, `ZOOM ${zoom.toFixed(2)}`);
   });
 }
 
@@ -192,12 +217,12 @@ const stickerUp = document.getElementById("sticker-up");
 const stickerDown = document.getElementById("sticker-down");
 
 stickerUp && stickerUp.addEventListener("click", () => {
-  enqueueSticker({ type: "STICKER", kind: "up" });
+  emitSticker({ type: "STICKER", kind: "up" }, "STICKER up");
   setMode("THUMBS_UP");
 });
 
 stickerDown && stickerDown.addEventListener("click", () => {
-  enqueueSticker({ type: "STICKER", kind: "down" });
+  emitSticker({ type: "STICKER", kind: "down" }, "STICKER down");
   setMode("THUMBS_DOWN");
 });
 
@@ -224,6 +249,13 @@ let pinchEnterAt = 0;
 let pinchExitAt = 0;
 let armHoldStartedAt = 0;
 let lastArmToggleAt = 0;
+let twoHandsSeenAt = 0;
+let zoom2HStartDist = 0;
+let zoom2HStartZoom = 1.0;
+let zoom2HLastSeenAt = 0;
+let zoom1HStartZoom = 1.0;
+let thumbsHoldAt = 0;
+let thumbsCandidate = "none";
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
@@ -283,6 +315,15 @@ function areOtherFingersCurled(landmarks) {
   );
 }
 
+function countCurledFingers(landmarks) {
+  let curled = 0;
+  if (!isFingerExtended(landmarks, 8, 6)) curled += 1;
+  if (!isFingerExtended(landmarks, 12, 10)) curled += 1;
+  if (!isFingerExtended(landmarks, 16, 14)) curled += 1;
+  if (!isFingerExtended(landmarks, 20, 18)) curled += 1;
+  return curled;
+}
+
 function isArmGesture(landmarks) {
   const indexExt = isFingerExtended(landmarks, 8, 6);
   const middleExt = isFingerExtended(landmarks, 12, 10);
@@ -291,12 +332,11 @@ function isArmGesture(landmarks) {
   return indexExt && middleExt && ringCurled && pinkyCurled;
 }
 
-function detectPinch(landmarks) {
+function pinchDistanceNormalized(landmarks) {
   const thumb = landmarks[4];
   const index = landmarks[8];
-  const handScale = distance(landmarks[0], landmarks[9]);
-  const pinchDist = distance(thumb, index);
-  return pinchDist < handScale * 0.25;
+  const handScale = distance(landmarks[0], landmarks[9]) || 1;
+  return distance(thumb, index) / handScale;
 }
 
 function computePalmCenter(landmarks) {
@@ -318,7 +358,7 @@ async function initHandLandmarker() {
         "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
     },
     runningMode: "VIDEO",
-    numHands: 1,
+    numHands: 2,
   });
 }
 
@@ -352,8 +392,11 @@ function drawLandmarks(ctx, landmarks, width, height) {
   });
 }
 
-function handleGestures(landmarks, width, height) {
+function handleGestures(landmarksList, width, height) {
   const now = Date.now();
+  const handsCount = landmarksList.length;
+  setHands(handsCount);
+
   if (!gesturesEnabled) {
     state = "IDLE";
     armActive = false;
@@ -362,7 +405,8 @@ function handleGestures(landmarks, width, height) {
     return;
   }
 
-  const armGesture = isArmGesture(landmarks);
+  const primary = landmarksList[0];
+  const armGesture = primary ? isArmGesture(primary) : false;
   if (armGesture) {
     if (!armHoldStartedAt) armHoldStartedAt = now;
     if (now - armHoldStartedAt >= 250 && now - lastArmToggleAt >= 1000) {
@@ -375,16 +419,100 @@ function handleGestures(landmarks, width, height) {
   }
 
   setArmed(armActive);
-  if (!armActive) {
+  if (!armActive || handsCount === 0) {
     state = "IDLE";
     setMode("IDLE");
     return;
   }
 
-  const thumbDir = detectThumbDirection(landmarks);
-  const otherCurled = areOtherFingersCurled(landmarks);
-  const openScore = openPalmScore(landmarks);
+  // Two-hand zoom detection.
+  if (handsCount >= 2) {
+    if (!twoHandsSeenAt) twoHandsSeenAt = now;
+  } else {
+    twoHandsSeenAt = 0;
+  }
 
+  if (handsCount >= 2) {
+    if (!zoom2HLastSeenAt) zoom2HLastSeenAt = now;
+  } else {
+    zoom2HLastSeenAt = now;
+  }
+
+  const canSwitchZoom = now - stateSince >= 400;
+
+  if (handsCount >= 2 && twoHandsSeenAt && now - twoHandsSeenAt >= 150 && (state !== "ZOOM_2H")) {
+    state = "ZOOM_2H";
+    stateSince = now;
+    const c1 = computePalmCenter(landmarksList[0]);
+    const c2 = computePalmCenter(landmarksList[1]);
+    zoom2HStartDist = distance(c1, c2);
+    zoom2HStartZoom = localZoom || 1.0;
+  }
+
+  if (state === "ZOOM_2H") {
+    if (handsCount < 2 && now - zoom2HLastSeenAt >= 200 && canSwitchZoom) {
+      state = "ARMED";
+      stateSince = now;
+    } else if (handsCount >= 2) {
+      const c1 = computePalmCenter(landmarksList[0]);
+      const c2 = computePalmCenter(landmarksList[1]);
+      const d = distance(c1, c2) || 1;
+      const targetZoom = clamp(zoom2HStartZoom * (d / (zoom2HStartDist || d)), 0.1, 6.0);
+      localZoom = targetZoom;
+      emitCommand({ type: "ZOOM", zoom: targetZoom }, `ZOOM_2H ${targetZoom.toFixed(2)}`);
+      setDebug(`Zoom2H D/D0 ${(d / (zoom2HStartDist || d)).toFixed(2)}`);
+      setMode("ZOOM_2H");
+      return;
+    }
+  }
+
+  // One-hand pinch zoom (fallback).
+  const thumbDir = detectThumbDirection(primary);
+  const openScore = openPalmScore(primary);
+  const pinchDist = pinchDistanceNormalized(primary);
+
+  if (pinchDist < 0.060) {
+    if (!pinchEnterAt) pinchEnterAt = now;
+  } else {
+    pinchEnterAt = 0;
+  }
+  if (pinchDist > 0.085) {
+    if (!pinchExitAt) pinchExitAt = now;
+  } else {
+    pinchExitAt = 0;
+  }
+
+  if (state !== "ZOOM_2H" && handsCount === 1) {
+    if ((state === "IDLE" || state === "ARMED") && pinchEnterAt && now - pinchEnterAt >= 120) {
+      state = "ZOOM_1H";
+      stateSince = now;
+      pinchActive = false;
+      zoom1HStartZoom = localZoom || 1.0;
+    }
+  }
+
+  if (state === "ZOOM_1H") {
+    if (pinchExitAt && now - pinchExitAt >= 120 && now - stateSince >= 400) {
+      state = "ARMED";
+      stateSince = now;
+      pinchActive = false;
+    } else {
+      const currentDist = pinchDist || 1;
+      if (!pinchActive) {
+        pinchActive = true;
+        pinchStartDist = currentDist;
+        pinchStartZoom = zoom1HStartZoom;
+      }
+      const targetZoom = clamp((pinchStartZoom * (pinchStartDist / currentDist)) || 1.0, 0.1, 6.0);
+      localZoom = targetZoom;
+      emitCommand({ type: "ZOOM", zoom: targetZoom }, `ZOOM_1H ${targetZoom.toFixed(2)}`);
+      setDebug(`Zoom1H pinch ${currentDist.toFixed(3)}`);
+      setMode("ZOOM_1H");
+      return;
+    }
+  }
+
+  // PAN (only if not zoom).
   if (openScore > 0.75) {
     if (!openPalmAboveAt) openPalmAboveAt = now;
   } else {
@@ -396,57 +524,18 @@ function handleGestures(landmarks, width, height) {
     openPalmBelowAt = 0;
   }
 
-  const thumb = landmarks[4];
-  const index = landmarks[8];
-  const handScale = distance(landmarks[0], landmarks[9]);
-  const pinchDist = distance(thumb, index) / (handScale || 1);
-  const pinchEnterThreshold = 0.045;
-  const pinchExitThreshold = 0.06;
-
-  if (pinchDist < pinchEnterThreshold) {
-    if (!pinchEnterAt) pinchEnterAt = now;
-  } else {
-    pinchEnterAt = 0;
+  if ((state === "IDLE" || state === "ARMED") && openPalmAboveAt && now - openPalmAboveAt >= 200) {
+    state = "PAN";
+    stateSince = now;
   }
-  if (pinchDist > pinchExitThreshold) {
-    if (!pinchExitAt) pinchExitAt = now;
-  } else {
-    pinchExitAt = 0;
-  }
-
-  const locked = now - stateSince < 250;
-
-  if (state === "IDLE" || state === "ARMED") {
-    if (pinchEnterAt && now - pinchEnterAt >= 120 && !locked) {
-      state = "ZOOM";
-      stateSince = now;
-      pinchActive = false;
-    } else if (openPalmAboveAt && now - openPalmAboveAt >= 200 && !locked) {
-      state = "PAN";
-      stateSince = now;
-    } else {
-      state = "ARMED";
-    }
-  }
-
-  if (state === "PAN") {
-    if (openPalmBelowAt && now - openPalmBelowAt >= 150) {
-      state = "ARMED";
-      stateSince = now;
-    }
-  }
-
-  if (state === "ZOOM") {
-    if (pinchExitAt && now - pinchExitAt >= 120) {
-      state = "ARMED";
-      stateSince = now;
-      pinchActive = false;
-    }
+  if (state === "PAN" && openPalmBelowAt && now - openPalmBelowAt >= 150) {
+    state = "ARMED";
+    stateSince = now;
   }
 
   if (state === "PAN") {
     if (now - lastPanAt >= 50) {
-      const palmCenter = computePalmCenter(landmarks);
+      const palmCenter = computePalmCenter(primary);
       const prev = smoothedPalm;
       const next = ema(smoothedPalm, palmCenter, 0.35);
       smoothedPalm = next;
@@ -456,37 +545,40 @@ function handleGestures(landmarks, width, height) {
         if (Math.abs(dx) + Math.abs(dy) >= 3) {
           dx = clamp(dx, -30, 30);
           dy = clamp(dy, -30, 30);
-          enqueueCommand({ type: "PAN", dx, dy });
+          emitCommand({ type: "PAN", dx, dy }, `PAN ${dx.toFixed(1)}, ${dy.toFixed(1)}`);
           lastPanAt = now;
         }
       }
     }
+    setMode("PAN");
+    return;
   }
 
-  if (state === "ZOOM") {
-    const currentDist = distance(thumb, index);
-    if (!pinchActive) {
-      pinchActive = true;
-      pinchStartDist = currentDist;
-      pinchStartZoom = localZoom || 1.0;
+  // Thumbs (only if not zoom and pinchDist is large).
+  const curledCount = countCurledFingers(primary);
+  const thumbExtended = thumbDir !== "none";
+  const allowThumbs = pinchDist > 0.1;
+  let candidate = "none";
+  if (allowThumbs && thumbExtended && curledCount >= 3) {
+    candidate = thumbDir === "up" ? "up" : thumbDir === "down" ? "down" : "none";
+  }
+  if (candidate !== thumbsCandidate) {
+    thumbsCandidate = candidate;
+    thumbsHoldAt = candidate !== "none" ? now : 0;
+  }
+  if (thumbsCandidate !== "none" && thumbsHoldAt && now - thumbsHoldAt >= 300) {
+    if (thumbsCandidate === "up") {
+      emitSticker({ type: "STICKER", kind: "up" }, "STICKER up");
+      setMode("THUMBS_UP");
+    } else if (thumbsCandidate === "down") {
+      emitSticker({ type: "STICKER", kind: "down" }, "STICKER down");
+      setMode("THUMBS_DOWN");
     }
-    const targetZoom = clamp((pinchStartZoom * (pinchStartDist / currentDist)) || 1.0, 0.1, 6.0);
-    localZoom = targetZoom;
-    enqueueCommand({ type: "ZOOM", zoom: targetZoom });
+    thumbsHoldAt = 0;
   }
 
-  if (thumbDir === "up" && otherCurled) {
-    enqueueSticker({ type: "STICKER", kind: "up" });
-    setMode("THUMBS_UP");
-    return;
-  }
-  if (thumbDir === "down" && otherCurled) {
-    enqueueSticker({ type: "STICKER", kind: "down" });
-    setMode("THUMBS_DOWN");
-    return;
-  }
-
-  setMode(state);
+  setDebug(`Pinch ${pinchDist.toFixed(3)}`);
+  setMode(state === "IDLE" ? "ARMED" : state);
 }
 
 async function startCamera() {
@@ -542,10 +634,10 @@ function drawFrame() {
     lastVideoTime = video.currentTime;
     const results = handLandmarker.detectForVideo(video, performance.now());
     if (results.landmarks && results.landmarks.length > 0) {
-      const landmarks = results.landmarks[0];
-      drawLandmarks(ctx, landmarks, width, height);
-      handleGestures(landmarks, width, height);
+      results.landmarks.forEach((landmarks) => drawLandmarks(ctx, landmarks, width, height));
+      handleGestures(results.landmarks, width, height);
     } else {
+      setHands(0);
       setMode("IDLE");
     }
   }
