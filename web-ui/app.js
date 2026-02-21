@@ -423,6 +423,11 @@ function handleGestures(landmarksList, handednessList, width, height) {
   if (!gesturesEnabled || handsCount === 0) {
     mode = "IDLE";
     setMode("IDLE");
+    setBadgeActive(badgeOpenPalm, false);
+    setBadgeActive(badgeIndexOnly, false);
+    setBadgeActive(badgeThumbsUp, false);
+    setBadgeActive(badgeThumbsDown, false);
+    setBadgeActive(badgeZoom2H, false);
     return;
   }
 
@@ -435,6 +440,7 @@ function handleGestures(landmarksList, handednessList, width, height) {
   if (handsCount >= 2) {
     openA = openPalmScore(landmarksList[0]) >= 0.75;
     openB = openPalmScore(landmarksList[1]) >= 0.75;
+    setBadgeActive(badgeOpenPalm, openA && openB);
     if (openA && openB) {
       if (!zoomEnterAt) zoomEnterAt = now;
     } else {
@@ -461,10 +467,12 @@ function handleGestures(landmarksList, handednessList, width, height) {
       zoomRatioEma = 1.0;
       setMode("ZOOM");
     }
+    setBadgeActive(badgeZoom2H, true);
 
     if (handsCount < 2 && now - modeSince >= 400 && zoomExitAt && now - zoomExitAt >= 150) {
       mode = "IDLE";
       setMode("IDLE");
+      setBadgeActive(badgeZoom2H, false);
       return;
     }
 
@@ -489,6 +497,7 @@ function handleGestures(landmarksList, handednessList, width, height) {
       !isFingerExtended(rightHand, 12, 10) &&
       !isFingerExtended(rightHand, 16, 14) &&
       !isFingerExtended(rightHand, 20, 18);
+    setBadgeActive(badgeIndexOnly, indexOnly);
     if (indexOnly) {
       if (!panEnterAt) panEnterAt = now;
     } else {
@@ -539,6 +548,8 @@ function handleGestures(landmarksList, handednessList, width, height) {
     if (thumbExtended && curledCount >= 3) {
       candidate = thumbDir === "up" ? "up" : thumbDir === "down" ? "down" : "none";
     }
+    setBadgeActive(badgeThumbsUp, candidate === "up");
+    setBadgeActive(badgeThumbsDown, candidate === "down");
     if (candidate !== thumbsCandidate) {
       thumbsCandidate = candidate;
       thumbsHoldAt = candidate !== "none" ? now : 0;
@@ -556,6 +567,7 @@ function handleGestures(landmarksList, handednessList, width, height) {
   }
 
   setZoomDebug("—", "—");
+  setBadgeActive(badgeZoom2H, false);
   setMode("IDLE");
 }
 
