@@ -1,6 +1,7 @@
 import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
 
 const RELAY_BASE_URL = "https://gesture-pilot-relay.vercel.app";
+const WS_RELAY_URL = "wss://YOUR-RENDER.onrender.com";
 const PAN_STEP = 120;
 
 // Relay status.
@@ -8,6 +9,7 @@ const connDot = document.getElementById("conn-dot");
 const connText = document.getElementById("conn-text");
 const relayError = document.getElementById("relay-error");
 const relayLastPush = document.getElementById("relay-last-push");
+const wsStatus = document.getElementById("ws-status");
 let connected = false;
 
 function setConnected(value) {
@@ -34,6 +36,8 @@ const copySecret = document.getElementById("copy-secret");
 
 let sessionId = "";
 let secret = "";
+let ws = null;
+let wsConnected = false;
 
 async function createSession() {
   try {
@@ -49,6 +53,7 @@ async function createSession() {
     if (pairingSecret) pairingSecret.textContent = secret;
     setConnected(true);
     setRelayError("");
+    connectWs();
   } catch (error) {
     setConnected(false);
     if (connText) connText.textContent = "Relay error";
@@ -245,6 +250,13 @@ let flushing = false;
 
 function enqueueCommand(command) {
   if (!sessionId || !secret) return;
+  if (wsConnected && ws && ws.readyState === ws.OPEN) {
+    try {
+      ws.send(JSON.stringify(command));
+      if (relayLastPush) relayLastPush.textContent = `Last push: ws [${sessionId}]`;
+      return;
+    } catch {}
+  }
   queue.push(command);
   flushQueue();
 }
@@ -788,4 +800,42 @@ function drawFrame() {
 if (video && canvas && cameraError) {
   cameraStart && cameraStart.addEventListener("click", () => startCamera());
   startCamera();
+}
+function setWsStatus(text) {
+  if (wsStatus) wsStatus.textContent = text;
+}
+
+function connectWs() {
+  if (!WS_RELAY_URL || WS_RELAY_URL.includes("YOUR-RENDER")) {
+    setWsStatus("WS: not configured (polling)");
+    return;
+  }
+  if (ws) {
+    try {
+      ws.close();
+    } catch {}
+  }
+  wsConnected = false;
+  setWsStatus("WS: connecting…");
+  ws = new WebSocket(WS_RELAY_URL);
+  ws.onopen = () => {
+    ws.send(JSON.stringify({ type: "hello", role: "source", sessionId, secret }));
+  };
+  ws.onmessage = (event) => {
+    try {
+      const msg = JSON.parse(event.data);
+      if (msg && msg.type === "hello" && msg.ok) {
+        wsConnected = true;
+        setWsStatus("WS: connected");
+      }
+    } catch {}
+  };
+  ws.onerror = () => {
+    wsConnected = false;
+    setWsStatus("WS: error (polling)");
+  };
+  ws.onclose = () => {
+    wsConnected = false;
+    setWsStatus("WS: closed (polling)");
+  };
 }

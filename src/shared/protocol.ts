@@ -27,6 +27,7 @@ export type RelayConnectMessage = {
   baseUrl: string;
   sessionId: string;
   secret: string;
+  wsUrl?: string;
 };
 
 export type RelayDisconnectMessage = {

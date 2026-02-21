@@ -5,6 +5,7 @@ function postMessage(message: RelayConnectMessage | RelayDisconnectMessage): voi
 }
 
 const relayUrlInput = document.getElementById("relay-url") as HTMLInputElement | null;
+const relayWsUrlInput = document.getElementById("relay-ws-url") as HTMLInputElement | null;
 const relaySessionInput = document.getElementById("relay-session") as HTMLInputElement | null;
 const relaySecretInput = document.getElementById("relay-secret") as HTMLInputElement | null;
 const connectBtn = document.getElementById("relay-connect");
@@ -20,11 +21,12 @@ if (statusText) {
 
 connectBtn?.addEventListener("click", () => {
   const baseUrl = relayUrlInput?.value.trim() || "";
+  const wsUrl = relayWsUrlInput?.value.trim() || "";
   const sessionId = relaySessionInput?.value.trim() || "";
   const secret = relaySecretInput?.value.trim() || "";
   if (statusText) statusText.textContent = "Connecting…";
   if (lastError) lastError.textContent = "Last error: —";
-  postMessage({ type: "RELAY_CONNECT", baseUrl, sessionId, secret });
+  postMessage({ type: "RELAY_CONNECT", baseUrl, sessionId, secret, wsUrl });
 });
 
 disconnectBtn?.addEventListener("click", () => {
