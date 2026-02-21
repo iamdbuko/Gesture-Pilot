@@ -405,10 +405,7 @@ function isOkGesture(landmarks) {
   const indexTip = landmarks[8];
   const handScale = distance(landmarks[0], landmarks[9]) || 1;
   const pinch = distance(thumbTip, indexTip) / handScale;
-  const middleCurled = !isFingerExtended(landmarks, 12, 10);
-  const ringCurled = !isFingerExtended(landmarks, 16, 14);
-  const pinkyCurled = !isFingerExtended(landmarks, 20, 18);
-  return pinch < 0.08 && middleCurled && ringCurled && pinkyCurled;
+  return pinch < 0.08;
 }
 
 function pinchDistanceNormalized(landmarks) {
