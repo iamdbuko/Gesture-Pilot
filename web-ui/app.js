@@ -76,8 +76,6 @@ const gestureZoom = document.getElementById("gesture-zoom");
 const gestureLast = document.getElementById("gesture-last");
 const badgeOpenPalm = document.getElementById("badge-openpalm");
 const badgeIndexOnly = document.getElementById("badge-indexonly");
-const badgeThumbsUp = document.getElementById("badge-thumbs-up");
-const badgeThumbsDown = document.getElementById("badge-thumbs-down");
 const badgeZoom2H = document.getElementById("badge-zoom2h");
 const panSlider = document.getElementById("pan-sensitivity");
 const panValue = document.getElementById("pan-sensitivity-value");
@@ -425,8 +423,6 @@ function handleGestures(landmarksList, handednessList, width, height) {
     setMode("IDLE");
     setBadgeActive(badgeOpenPalm, false);
     setBadgeActive(badgeIndexOnly, false);
-    setBadgeActive(badgeThumbsUp, false);
-    setBadgeActive(badgeThumbsDown, false);
     setBadgeActive(badgeZoom2H, false);
     return;
   }
@@ -544,31 +540,7 @@ function handleGestures(landmarksList, handednessList, width, height) {
   }
 
   // Stickers (right hand thumbs up/down hold).
-  if (rightHand) {
-    const thumbDir = detectThumbDirection(rightHand);
-    const curledCount = countCurledFingers(rightHand);
-    const thumbExtended = thumbDir !== "none";
-    let candidate = "none";
-    if (thumbExtended && curledCount >= 3) {
-      candidate = thumbDir === "up" ? "up" : thumbDir === "down" ? "down" : "none";
-    }
-    setBadgeActive(badgeThumbsUp, candidate === "up");
-    setBadgeActive(badgeThumbsDown, candidate === "down");
-    if (candidate !== thumbsCandidate) {
-      thumbsCandidate = candidate;
-      thumbsHoldAt = candidate !== "none" ? now : 0;
-      if (candidate === "up") setMode("STICKER_UP_PENDING");
-      if (candidate === "down") setMode("STICKER_DOWN_PENDING");
-    }
-    if (thumbsCandidate !== "none" && thumbsHoldAt && now - thumbsHoldAt >= 1000) {
-      const lastAt = lastThumbsAt[thumbsCandidate] || 0;
-      if (now - lastAt >= 1500) {
-        emitSticker({ type: "STICKER", kind: thumbsCandidate }, `STICKER ${thumbsCandidate}`);
-        lastThumbsAt[thumbsCandidate] = now;
-      }
-      thumbsHoldAt = 0;
-    }
-  }
+  // Thumbs temporarily disabled.
 
   setZoomDebug("—", "—");
   setBadgeActive(badgeZoom2H, false);
