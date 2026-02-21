@@ -641,11 +641,11 @@ function handleGestures(landmarksList, handednessList, width, height) {
         // Stronger acceleration curve for fast moves.
         const accel = 1 + Math.pow(speed, 1.7) * speedGain * 2000;
         const gain = clamp(accel, 0.4, maxGain);
-        dx = dx * panSensitivity * gain;
-        dy = dy * panSensitivity * gain;
+        dx = -dx * panSensitivity * gain;
+        dy = -dy * panSensitivity * gain;
         if (Math.abs(dx) + Math.abs(dy) >= deadzone) {
-          dx = clamp(dx, -30, 30);
-          dy = clamp(dy, -30, 30);
+          dx = clamp(dx, -20, 20);
+          dy = clamp(dy, -20, 20);
           emitCommand({ type: "PAN", dx, dy }, `PAN ${dx.toFixed(1)}, ${dy.toFixed(1)}`);
           inertialVx = dx;
           inertialVy = dy;
