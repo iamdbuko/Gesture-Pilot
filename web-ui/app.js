@@ -88,7 +88,10 @@ function setMode(label) {
 }
 
 function setArmed(value) {
-  if (gestureArmed) gestureArmed.textContent = `Armed: ${value ? "ON" : "OFF"}`;
+  if (gestureArmed) {
+    gestureArmed.textContent = `ARMED: ${value ? "ON" : "OFF"}`;
+    gestureArmed.classList.toggle("armed-on", value);
+  }
 }
 
 if (gestureToggle) {
@@ -214,12 +217,13 @@ let pinchStartZoom = 1.0;
 let smoothedPalm = null;
 let state = "IDLE";
 let stateSince = 0;
-let lastArmSeenAt = 0;
 let armActive = false;
 let openPalmAboveAt = 0;
 let openPalmBelowAt = 0;
 let pinchEnterAt = 0;
 let pinchExitAt = 0;
+let armHoldStartedAt = 0;
+let lastArmToggleAt = 0;
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
@@ -360,12 +364,14 @@ function handleGestures(landmarks, width, height) {
 
   const armGesture = isArmGesture(landmarks);
   if (armGesture) {
-    lastArmSeenAt = now;
-  }
-  if (now - lastArmSeenAt > 200) {
-    armActive = false;
+    if (!armHoldStartedAt) armHoldStartedAt = now;
+    if (now - armHoldStartedAt >= 250 && now - lastArmToggleAt >= 1000) {
+      armActive = !armActive;
+      lastArmToggleAt = now;
+      setArmed(armActive);
+    }
   } else {
-    armActive = true;
+    armHoldStartedAt = 0;
   }
 
   setArmed(armActive);
@@ -424,14 +430,14 @@ function handleGestures(landmarks, width, height) {
   }
 
   if (state === "PAN") {
-    if ((openPalmBelowAt && now - openPalmBelowAt >= 150) || !armActive) {
+    if (openPalmBelowAt && now - openPalmBelowAt >= 150) {
       state = "ARMED";
       stateSince = now;
     }
   }
 
   if (state === "ZOOM") {
-    if ((pinchExitAt && now - pinchExitAt >= 120) || !armActive) {
+    if (pinchExitAt && now - pinchExitAt >= 120) {
       state = "ARMED";
       stateSince = now;
       pinchActive = false;

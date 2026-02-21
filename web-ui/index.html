@@ -96,6 +96,14 @@
       .dot.ok {
         background: #30b95a;
       }
+      .armed-indicator {
+        font-size: 20px;
+        font-weight: 700;
+        color: #1c1c1f;
+      }
+      .armed-on {
+        color: #0f8b3a;
+      }
     </style>
   </head>
   <body>
@@ -133,7 +141,8 @@
         <input id="pan-sensitivity" type="range" min="0.5" max="3" step="0.1" value="1.2" />
         <span id="pan-sensitivity-value" class="subtle">1.2</span>
       </div>
-      <p class="subtle" id="gesture-armed">Armed: OFF</p>
+      <p class="armed-indicator" id="gesture-armed">ARMED: OFF</p>
+      <p class="subtle">Show ✌️ to toggle control</p>
       <p class="subtle" id="gesture-mode">Mode: IDLE</p>
       <p class="subtle" id="gesture-status">Gestures disabled</p>
     </div>
