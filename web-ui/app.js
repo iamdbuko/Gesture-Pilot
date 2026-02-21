@@ -400,12 +400,12 @@ function isArmGesture(landmarks) {
   return indexExt && middleExt && ringCurled && pinkyCurled;
 }
 
-function isOkGesture(landmarks) {
-  const thumbTip = landmarks[4];
-  const indexTip = landmarks[8];
-  const handScale = distance(landmarks[0], landmarks[9]) || 1;
-  const pinch = distance(thumbTip, indexTip) / handScale;
-  return pinch < 0.12;
+function isTwoFingerGesture(landmarks) {
+  const indexExt = isFingerExtended(landmarks, 8, 6);
+  const middleExt = isFingerExtended(landmarks, 12, 10);
+  const ringCurled = !isFingerExtended(landmarks, 16, 14);
+  const pinkyCurled = !isFingerExtended(landmarks, 20, 18);
+  return indexExt && middleExt && ringCurled && pinkyCurled;
 }
 
 function pinchDistanceNormalized(landmarks) {
@@ -575,17 +575,17 @@ function handleGestures(landmarksList, handednessList, width, height) {
     return;
   }
 
-  // PAN (right hand, OK gesture).
+  // PAN (right hand, two-finger gesture).
   if (rightHand) {
-    const okGesture = isOkGesture(rightHand);
-    setBadgeActive(badgeIndexOnly, okGesture);
-    if (okGesture) {
+    const twoFinger = isTwoFingerGesture(rightHand);
+    setBadgeActive(badgeIndexOnly, twoFinger);
+    if (twoFinger) {
       lastIndexSeenAt = now;
       if (!panEnterAt) panEnterAt = now;
     } else {
       panEnterAt = 0;
     }
-    if (!okGesture) {
+    if (!twoFinger) {
       if (!panExitAt) panExitAt = now;
     } else {
       panExitAt = 0;
@@ -599,7 +599,7 @@ function handleGestures(landmarksList, handednessList, width, height) {
         smoothedIndex = null;
         inertialActive = false;
       }
-      if (!okGesture && panExitAt && now - panExitAt >= clutchDelayMs) {
+      if (!twoFinger && panExitAt && now - panExitAt >= clutchDelayMs) {
         mode = "IDLE";
         setMode("IDLE");
         panEngaged = false;
@@ -607,7 +607,9 @@ function handleGestures(landmarksList, handednessList, width, height) {
         return;
       }
 
-      const tip = rightHand[8];
+      const tipA = rightHand[8];
+      const tipB = rightHand[12];
+      const tip = { x: (tipA.x + tipB.x) / 2, y: (tipA.y + tipB.y) / 2 };
       const prev = smoothedIndex;
       const next = ema(smoothedIndex, { x: tip.x, y: tip.y }, emaAlpha);
       smoothedIndex = next;
@@ -617,7 +619,7 @@ function handleGestures(landmarksList, handednessList, width, height) {
         let dy = (next.y - prev.y) * height * yBoost;
 
         const speed = Math.hypot(dx, dy);
-        const gain = clamp(0.6 + speed * speedGain, 0.6, maxGain);
+        const gain = clamp(0.4 + speed * speedGain, 0.4, maxGain);
         dx = dx * panSensitivity * gain;
         dy = dy * panSensitivity * gain;
         if (Math.abs(dx) + Math.abs(dy) >= deadzone) {
