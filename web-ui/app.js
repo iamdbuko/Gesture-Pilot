@@ -359,6 +359,7 @@ let zoomS0 = 0;
 let zoomRatioEma = 1.0;
 let zoom0 = 1.0;
 let zoomWarmupUntil = 0;
+let zoomMoveStartAt = 0;
 let thumbsHoldAt = 0;
 let thumbsCandidate = "none";
 let lastThumbsAt = { up: 0, down: 0 };
@@ -583,6 +584,7 @@ function handleGestures(landmarksList, handednessList, width, height) {
       zoom0 = localZoom || 1.0;
       zoomRatioEma = 1.0;
       zoomWarmupUntil = now + 250;
+      zoomMoveStartAt = 0;
       setMode("ZOOM");
     }
     setBadgeActive(badgeZoom2H, true);
@@ -595,9 +597,8 @@ function handleGestures(landmarksList, handednessList, width, height) {
     }
 
     if (rightHand) {
-      const openScore = openPalmScore(rightHand);
-      if (openScore < 0.6) {
-        // Ignore zoom when palm is closing to avoid super-zoom.
+      if (!openA) {
+        // Palm closed: exit without changing zoom.
         setZoomDebug("—", zoomS0 ? zoomS0.toFixed(3) : "—");
         return;
       }
@@ -605,10 +606,17 @@ function handleGestures(landmarksList, handednessList, width, height) {
       const ratioRaw = clamp(zoomS0 / s, 0.1, 10);
       zoomRatioEma = 0.7 * zoomRatioEma + 0.3 * ratioRaw;
       // Only emit zoom after warmup and when size change is meaningful.
-      if (now >= zoomWarmupUntil && Math.abs(zoomRatioEma - 1) > 0.03) {
-        const targetZoom = clamp(zoom0 * zoomRatioEma, 0.1, 6.0);
-        localZoom = targetZoom;
-        emitCommand({ type: "ZOOM", zoom: targetZoom }, `ZOOM ${targetZoom.toFixed(2)}`);
+      if (now >= zoomWarmupUntil) {
+        if (Math.abs(zoomRatioEma - 1) > 0.03) {
+          if (!zoomMoveStartAt) zoomMoveStartAt = now;
+        } else {
+          zoomMoveStartAt = 0;
+        }
+        if (zoomMoveStartAt && now - zoomMoveStartAt >= 150) {
+          const targetZoom = clamp(zoom0 * zoomRatioEma, 0.1, 6.0);
+          localZoom = targetZoom;
+          emitCommand({ type: "ZOOM", zoom: targetZoom }, `ZOOM ${targetZoom.toFixed(2)}`);
+        }
       }
       setZoomDebug(s.toFixed(3), zoomS0.toFixed(3));
     }
