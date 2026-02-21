@@ -1,104 +1,40 @@
-import type { UiToMainMessage } from "../shared/protocol";
+import type { MainToUiMessage, RelayConnectMessage, RelayDisconnectMessage } from "../shared/protocol";
 
-const PAN_STEP = 120;
-
-function postMessage(message: UiToMainMessage): void {
+function postMessage(message: RelayConnectMessage | RelayDisconnectMessage): void {
   parent.postMessage({ pluginMessage: message }, "*");
 }
 
-const gestureToggle = document.getElementById("enable-gestures") as HTMLInputElement | null;
-const gestureStatus = document.getElementById("gesture-status");
+const relayUrlInput = document.getElementById("relay-url") as HTMLInputElement | null;
+const relaySessionInput = document.getElementById("relay-session") as HTMLInputElement | null;
+const relaySecretInput = document.getElementById("relay-secret") as HTMLInputElement | null;
+const connectBtn = document.getElementById("relay-connect");
+const disconnectBtn = document.getElementById("relay-disconnect");
+const statusDot = document.getElementById("relay-dot");
+const statusText = document.getElementById("relay-status");
+const lastCommand = document.getElementById("relay-last");
 
-if (gestureToggle && gestureStatus) {
-  const updateStatus = () => {
-    gestureStatus.textContent = gestureToggle.checked ? "Gestures enabled" : "Gestures disabled";
-  };
-  gestureToggle.addEventListener("change", updateStatus);
-  updateStatus();
-}
-
-const panButtons = document.querySelectorAll<HTMLButtonElement>("button[data-pan]");
-
-panButtons.forEach((button) => {
-  button.addEventListener("click", () => {
-    const dir = button.dataset.pan;
-    let dx = 0;
-    let dy = 0;
-
-    if (dir === "up") dy = -PAN_STEP;
-    if (dir === "down") dy = PAN_STEP;
-    if (dir === "left") dx = -PAN_STEP;
-    if (dir === "right") dx = PAN_STEP;
-
-    postMessage({ type: "PAN", dx, dy });
-  });
+connectBtn?.addEventListener("click", () => {
+  const baseUrl = relayUrlInput?.value.trim() || "";
+  const sessionId = relaySessionInput?.value.trim() || "";
+  const secret = relaySecretInput?.value.trim() || "";
+  postMessage({ type: "RELAY_CONNECT", baseUrl, sessionId, secret });
 });
 
-const zoomInput = document.getElementById("zoom-value") as HTMLInputElement | null;
-const zoomSet = document.getElementById("zoom-set");
-
-if (zoomInput && zoomSet) {
-  zoomSet.addEventListener("click", () => {
-    const zoom = Number(zoomInput.value) || 1;
-    postMessage({ type: "ZOOM", zoom });
-  });
-}
-
-const stickerUp = document.getElementById("sticker-up");
-const stickerDown = document.getElementById("sticker-down");
-
-stickerUp?.addEventListener("click", () => {
-  postMessage({ type: "STICKER", kind: "up" });
+disconnectBtn?.addEventListener("click", () => {
+  postMessage({ type: "RELAY_DISCONNECT" });
 });
 
-stickerDown?.addEventListener("click", () => {
-  postMessage({ type: "STICKER", kind: "down" });
-});
+window.onmessage = (event) => {
+  const message = event.data && event.data.pluginMessage;
+  if (!message) return;
+  const payload = message as MainToUiMessage;
 
-// Camera preview + canvas overlay.
-const video = document.getElementById("camera-video") as HTMLVideoElement | null;
-const canvas = document.getElementById("camera-canvas") as HTMLCanvasElement | null;
-const cameraError = document.getElementById("camera-error");
+  if (payload.type === "RELAY_STATUS") {
+    if (statusText) statusText.textContent = payload.message;
+    if (statusDot) statusDot.classList.toggle("ok", payload.connected);
+  }
 
-if (video && canvas && cameraError) {
-  const ctx = canvas.getContext("2d");
-  let lastFrameTime = 0;
-
-  const drawFrame = (time: number) => {
-    // Throttle to ~30fps.
-    if (time - lastFrameTime >= 33) {
-      lastFrameTime = time;
-      if (ctx && video.readyState >= 2) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      }
-    }
-    requestAnimationFrame(drawFrame);
-  };
-
-  const startCamera = async () => {
-    try {
-      const mediaDevices = navigator.mediaDevices;
-      if (!mediaDevices || !mediaDevices.getUserMedia) {
-        cameraError.hidden = false;
-        cameraError.textContent =
-          "Camera API not available in this Figma environment. Buttons still work.";
-        return;
-      }
-
-      const stream = await mediaDevices.getUserMedia({ video: true });
-      video.srcObject = stream;
-      await video.play();
-      video.addEventListener("loadedmetadata", () => {
-        canvas.width = video.videoWidth || 640;
-        canvas.height = video.videoHeight || 480;
-      });
-      requestAnimationFrame(drawFrame);
-    } catch (error) {
-      cameraError.hidden = false;
-      cameraError.textContent = "Camera unavailable. Check permissions or use a supported device.";
-      console.warn("Camera error:", error);
-    }
-  };
-
-  startCamera();
-}
+  if (payload.type === "RELAY_LAST") {
+    if (lastCommand) lastCommand.textContent = `Last command: ${payload.command}`;
+  }
+};

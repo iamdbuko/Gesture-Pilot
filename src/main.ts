@@ -1,4 +1,4 @@
-import type { StickerMessage, UiToMainMessage } from "./shared/protocol";
+import type { StickerMessage, UiToMainMessage, MainToUiMessage } from "./shared/protocol";
 
 const UI_WIDTH = 320;
 const UI_HEIGHT = 360;
@@ -55,6 +55,14 @@ figma.ui.onmessage = async (message: UiToMainMessage) => {
       figma.ui.postMessage({ type: "PONG" });
       break;
     }
+    case "RELAY_CONNECT": {
+      await relayConnect(message.baseUrl, message.sessionId, message.secret);
+      break;
+    }
+    case "RELAY_DISCONNECT": {
+      relayDisconnect();
+      break;
+    }
     case "PAN": {
       const zoom = figma.viewport.zoom || 1;
       const center = figma.viewport.center;
@@ -77,3 +85,104 @@ figma.ui.onmessage = async (message: UiToMainMessage) => {
     }
   }
 };
+
+type RelayState = {
+  baseUrl: string;
+  sessionId: string;
+  secret: string;
+  intervalId: number | null;
+};
+
+let relayState: RelayState | null = null;
+
+function postUi(message: MainToUiMessage) {
+  figma.ui.postMessage(message);
+}
+
+function setRelayStatus(connected: boolean, message: string) {
+  postUi({ type: "RELAY_STATUS", connected, message });
+}
+
+function setLastCommand(command: string) {
+  postUi({ type: "RELAY_LAST", command });
+}
+
+function relayDisconnect() {
+  if (relayState?.intervalId != null) {
+    clearInterval(relayState.intervalId);
+  }
+  relayState = null;
+  setRelayStatus(false, "Disconnected");
+}
+
+async function relayConnect(baseUrl: string, sessionId: string, secret: string) {
+  relayDisconnect();
+
+  if (!baseUrl || !sessionId || !secret) {
+    setRelayStatus(false, "Missing relay fields");
+    return;
+  }
+
+  relayState = {
+    baseUrl: baseUrl.replace(/\/$/, ""),
+    sessionId,
+    secret,
+    intervalId: null,
+  };
+
+  setRelayStatus(true, "Connected");
+
+  const poll = async () => {
+    if (!relayState) return;
+    try {
+      const url =
+        `${relayState.baseUrl}/api/pull?sessionId=` +
+        encodeURIComponent(relayState.sessionId) +
+        `&secret=` +
+        encodeURIComponent(relayState.secret);
+      const res = await fetch(url);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Relay pull failed");
+      const commands = Array.isArray(data.commands) ? data.commands : [];
+      for (const cmd of commands) {
+        await handleRelayCommand(cmd);
+      }
+    } catch (error) {
+      setRelayStatus(false, "Relay error");
+    }
+  };
+
+  relayState.intervalId = setInterval(poll, 200) as unknown as number;
+  poll();
+}
+
+async function handleRelayCommand(command: any) {
+  if (!command || typeof command !== "object" || !("type" in command)) {
+    return;
+  }
+  switch (command.type) {
+    case "PAN": {
+      const zoom = figma.viewport.zoom || 1;
+      const center = figma.viewport.center;
+      figma.viewport.center = {
+        x: center.x + Number(command.dx || 0) / zoom,
+        y: center.y + Number(command.dy || 0) / zoom,
+      };
+      setLastCommand(`PAN ${command.dx}, ${command.dy}`);
+      break;
+    }
+    case "ZOOM": {
+      const center = figma.viewport.center;
+      const clamped = clamp(Number(command.zoom || 1), 0.1, 6.0);
+      figma.viewport.zoom = clamped;
+      figma.viewport.center = center;
+      setLastCommand(`ZOOM ${clamped}`);
+      break;
+    }
+    case "STICKER": {
+      await createStickerAtCenter(command);
+      setLastCommand(`STICKER ${command.kind}`);
+      break;
+    }
+  }
+}

@@ -12,7 +12,8 @@
   ],
   "networkAccess": {
     "allowedDomains": [
-      "https://gesture-pilot.vercel.app"
+      "https://gesture-pilot.vercel.app",
+      "https://your-relay.vercel.app"
     ]
   }
 }

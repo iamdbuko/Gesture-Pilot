@@ -1,16 +1,8 @@
 const PAN_STEP = 120;
 
-const params = new URLSearchParams(window.location.search);
-const pluginId = params.get("pluginId") || "*";
+const RELAY_BASE_URL = "https://your-relay.vercel.app";
 
-function sendToPlugin(message) {
-  if (window.parent === window) {
-    return;
-  }
-  window.parent.postMessage({ pluginMessage: message, pluginId }, "*");
-}
-
-// Connection check.
+// Relay status.
 const connDot = document.getElementById("conn-dot");
 const connText = document.getElementById("conn-text");
 let connected = false;
@@ -18,26 +10,46 @@ let connected = false;
 function setConnected(value) {
   connected = value;
   if (connDot) connDot.classList.toggle("ok", value);
-  if (connText) connText.textContent = value ? "Connected" : "Connecting…";
+  if (connText) connText.textContent = value ? "Relay connected" : "Relay error";
 }
-
-window.addEventListener("message", (event) => {
-  const message = event.data && event.data.pluginMessage;
-  if (message && message.type === "PONG") {
-    setConnected(true);
-  }
-});
 
 setConnected(false);
-if (window.parent !== window) {
-  setInterval(() => {
-    if (!connected) sendToPlugin({ type: "PING" });
-  }, 1000);
-  sendToPlugin({ type: "PING" });
-} else {
-  setConnected(false);
-  if (connText) connText.textContent = "Not embedded (preview mode)";
+if (connText) connText.textContent = "Relay connecting…";
+
+const pairingCode = document.getElementById("pairing-code");
+const pairingSecret = document.getElementById("pairing-secret");
+const copyCode = document.getElementById("copy-code");
+const copySecret = document.getElementById("copy-secret");
+
+let sessionId = "";
+let secret = "";
+
+async function createSession() {
+  try {
+    const res = await fetch(`${RELAY_BASE_URL}/api/create-session`, { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "create-session failed");
+    sessionId = data.sessionId;
+    secret = data.secret;
+    if (pairingCode) pairingCode.textContent = sessionId;
+    if (pairingSecret) pairingSecret.textContent = secret;
+    setConnected(true);
+  } catch (error) {
+    setConnected(false);
+    if (connText) connText.textContent = "Relay error";
+    console.warn("Relay create-session error:", error);
+  }
 }
+
+function copyText(value) {
+  if (!value) return;
+  navigator.clipboard?.writeText(value).catch(() => {});
+}
+
+copyCode && copyCode.addEventListener("click", () => copyText(sessionId));
+copySecret && copySecret.addEventListener("click", () => copyText(secret));
+
+createSession();
 
 // Gestures toggle (UI-only).
 const gestureToggle = document.getElementById("enable-gestures");
@@ -61,7 +73,7 @@ panButtons.forEach((button) => {
     if (dir === "down") dy = PAN_STEP;
     if (dir === "left") dx = -PAN_STEP;
     if (dir === "right") dx = PAN_STEP;
-    sendToPlugin({ type: "PAN", dx, dy });
+    enqueueCommand({ type: "PAN", dx, dy });
   });
 });
 
@@ -71,7 +83,7 @@ const zoomSet = document.getElementById("zoom-set");
 if (zoomInput && zoomSet) {
   zoomSet.addEventListener("click", () => {
     const zoom = Number(zoomInput.value) || 1;
-    sendToPlugin({ type: "ZOOM", zoom });
+    enqueueCommand({ type: "ZOOM", zoom });
   });
 }
 
@@ -80,12 +92,55 @@ const stickerUp = document.getElementById("sticker-up");
 const stickerDown = document.getElementById("sticker-down");
 
 stickerUp && stickerUp.addEventListener("click", () => {
-  sendToPlugin({ type: "STICKER", kind: "up" });
+  enqueueSticker({ type: "STICKER", kind: "up" });
 });
 
 stickerDown && stickerDown.addEventListener("click", () => {
-  sendToPlugin({ type: "STICKER", kind: "down" });
+  enqueueSticker({ type: "STICKER", kind: "down" });
 });
+
+// Relay queue + batching (max 20 req/s).
+const queue = [];
+const MAX_PER_FLUSH = 25;
+let lastStickerAt = 0;
+let flushing = false;
+
+function enqueueCommand(command) {
+  if (!sessionId || !secret) return;
+  queue.push(command);
+}
+
+function enqueueSticker(command) {
+  const now = Date.now();
+  if (now - lastStickerAt < 1500) return;
+  lastStickerAt = now;
+  enqueueCommand(command);
+}
+
+async function flushQueue() {
+  if (flushing || queue.length === 0 || !sessionId || !secret) return;
+  flushing = true;
+  const batch = queue.splice(0, MAX_PER_FLUSH);
+  try {
+    const res = await fetch(`${RELAY_BASE_URL}/api/push`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId, secret, commands: batch }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "push failed");
+    setConnected(true);
+  } catch (error) {
+    setConnected(false);
+    console.warn("Relay push error:", error);
+  } finally {
+    flushing = false;
+  }
+}
+
+setInterval(() => {
+  flushQueue();
+}, 50);
 
 // Camera preview + canvas overlay.
 const video = document.getElementById("camera-video");

@@ -5,30 +5,100 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Gesture Pilot</title>
     <style>
+      :root {
+        color-scheme: light;
+        font-family: "Inter", system-ui, -apple-system, sans-serif;
+      }
       body {
         margin: 0;
         padding: 16px;
-        font-family: system-ui, -apple-system, sans-serif;
+        background: #f7f7fb;
+        color: #1c1c1f;
       }
-      .hint {
+      h1 {
+        font-size: 16px;
+        margin: 0 0 12px;
+      }
+      .panel {
+        background: #ffffff;
+        border-radius: 12px;
+        padding: 12px;
+        box-shadow: 0 6px 18px rgba(22, 22, 28, 0.08);
+        margin-bottom: 12px;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      label {
         font-size: 12px;
-        color: #555;
+      }
+      input[type="text"] {
+        width: 100%;
+        padding: 6px 8px;
+        border-radius: 8px;
+        border: 1px solid #d7d9e2;
+        font-size: 12px;
+      }
+      button {
+        border: none;
+        border-radius: 8px;
+        padding: 8px 12px;
+        background: #2b2f38;
+        color: #ffffff;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      button.secondary {
+        background: #e5e7ef;
+        color: #1c1c1f;
+      }
+      .subtle {
+        font-size: 11px;
+        color: #5b5f6b;
+      }
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        color: #5b5f6b;
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: #d0d3dc;
+      }
+      .dot.ok {
+        background: #30b95a;
       }
     </style>
   </head>
   <body>
-    <p class="hint">Redirecting to hosted UI…</p>
-    <script>
-      (function () {
-        var baseUrl = "https://gesture-pilot.vercel.app/";
-        var params = new URLSearchParams(window.location.search);
-        var pluginId = params.get("pluginId");
-        if (pluginId) {
-          baseUrl += (baseUrl.indexOf("?") >= 0 ? "&" : "?") + "pluginId=" + encodeURIComponent(pluginId);
-        }
-        baseUrl += (baseUrl.indexOf("?") >= 0 ? "&" : "?") + "v=1";
-        window.location.href = baseUrl;
-      })();
-    </script>
+    <h1>Gesture Pilot</h1>
+
+    <div class="panel">
+      <label>Relay Base URL</label>
+      <input id="relay-url" type="text" placeholder="https://your-relay.vercel.app" />
+      <div style="height: 8px;"></div>
+      <label>Session ID</label>
+      <input id="relay-session" type="text" placeholder="e.g. a1b2c3" />
+      <div style="height: 8px;"></div>
+      <label>Secret</label>
+      <input id="relay-secret" type="text" placeholder="e.g. 123abc..." />
+      <div class="row" style="margin-top: 8px;">
+        <button id="relay-connect">Connect</button>
+        <button id="relay-disconnect" class="secondary">Disconnect</button>
+      </div>
+      <div class="status" style="margin-top: 8px;">
+        <span class="dot" id="relay-dot"></span>
+        <span id="relay-status">Disconnected</span>
+      </div>
+      <p class="subtle" id="relay-last">Last command: —</p>
+    </div>
+
+    <script src="ui.js"></script>
   </body>
 </html>

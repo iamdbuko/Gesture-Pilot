@@ -22,5 +22,33 @@ export type PongMessage = {
   type: "PONG";
 };
 
-export type UiToMainMessage = PanMessage | ZoomMessage | StickerMessage | PingMessage;
-export type MainToUiMessage = PongMessage;
+export type RelayConnectMessage = {
+  type: "RELAY_CONNECT";
+  baseUrl: string;
+  sessionId: string;
+  secret: string;
+};
+
+export type RelayDisconnectMessage = {
+  type: "RELAY_DISCONNECT";
+};
+
+export type RelayStatusMessage = {
+  type: "RELAY_STATUS";
+  connected: boolean;
+  message: string;
+};
+
+export type RelayLastCommandMessage = {
+  type: "RELAY_LAST";
+  command: string;
+};
+
+export type UiToMainMessage =
+  | PanMessage
+  | ZoomMessage
+  | StickerMessage
+  | PingMessage
+  | RelayConnectMessage
+  | RelayDisconnectMessage;
+export type MainToUiMessage = PongMessage | RelayStatusMessage | RelayLastCommandMessage;
