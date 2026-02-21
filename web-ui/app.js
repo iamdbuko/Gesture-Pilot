@@ -90,6 +90,8 @@ const speedGainInput = document.getElementById("speed-gain");
 const speedGainValue = document.getElementById("speed-gain-value");
 const maxGainInput = document.getElementById("max-gain");
 const maxGainValue = document.getElementById("max-gain-value");
+const yBoostInput = document.getElementById("y-boost");
+const yBoostValue = document.getElementById("y-boost-value");
 const activeRadiusInput = document.getElementById("active-radius");
 const activeRadiusValue = document.getElementById("active-radius-value");
 
@@ -101,6 +103,7 @@ let deadzone = 1.5;
 let emaAlpha = 0.22;
 let speedGain = 0.03;
 let maxGain = 3.0;
+let yBoost = 1.4;
 let activeRadiusPx = 90;
 
 function updateGestureStatus() {
@@ -187,6 +190,13 @@ if (maxGainInput && maxGainValue) {
   maxGainInput.addEventListener("input", () => {
     maxGain = Number(maxGainInput.value) || 3.0;
     maxGainValue.textContent = maxGain.toFixed(2);
+  });
+}
+
+if (yBoostInput && yBoostValue) {
+  yBoostInput.addEventListener("input", () => {
+    yBoost = Number(yBoostInput.value) || 1.0;
+    yBoostValue.textContent = yBoost.toFixed(1);
   });
 }
 
@@ -617,11 +627,11 @@ function handleGestures(landmarksList, handednessList, width, height) {
 
       if (prev && next && now - lastPanAt >= 50) {
         let dx = (next.x - prev.x) * width;
-        let dy = (next.y - prev.y) * height;
+        let dy = (next.y - prev.y) * height * yBoost;
 
         if (trackpadMode === "v2" && activeOrigin) {
           const ox = (next.x - activeOrigin.x) * width;
-          const oy = (next.y - activeOrigin.y) * height;
+          const oy = (next.y - activeOrigin.y) * height * yBoost;
           const dist = Math.hypot(ox, oy);
           if (dist > activeRadiusPx) {
             return;
