@@ -328,6 +328,7 @@ let activeOrigin = null;
 let inertialVx = 0;
 let inertialVy = 0;
 let inertialActive = false;
+let lastTwoFinger = false;
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
@@ -586,8 +587,18 @@ function handleGestures(landmarksList, handednessList, width, height) {
     if (twoFinger) {
       lastIndexSeenAt = now;
       if (!panEnterAt) panEnterAt = now;
+      lastTwoFinger = true;
     } else {
       panEnterAt = 0;
+      if (lastTwoFinger) {
+        // Gesture just ended: reset to avoid release-jitter.
+        smoothedIndex = null;
+        inertialActive = false;
+        inertialVx = 0;
+        inertialVy = 0;
+        lastPanAt = now;
+      }
+      lastTwoFinger = false;
     }
     if (!twoFinger) {
       if (!panExitAt) panExitAt = now;
@@ -608,6 +619,10 @@ function handleGestures(landmarksList, handednessList, width, height) {
         setMode("IDLE");
         panEngaged = false;
         inertialActive = true;
+        return;
+      }
+
+      if (!twoFinger) {
         return;
       }
 
