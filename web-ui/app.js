@@ -103,7 +103,7 @@ let speedGain = 0.12;
 let maxGain = 30.0;
 let yBoost = 1.4;
 let activeRadiusPx = 90;
-let profile = "accelerated";
+let profile = "linear";
 
 function updateGestureStatus() {
   if (gestureStatus) {
@@ -154,26 +154,33 @@ if (panSlider && panValue) {
 function applyProfile(nextProfile) {
   profile = nextProfile;
   if (profile === "linear") {
-    panSensitivity = 1.6;
-    deadzone = 0.4;
-    emaAlpha = 0.35;
+    panSensitivity = 1.8;
+    deadzone = 0.5;
+    emaAlpha = 0.22;
     speedGain = 0.04;
     maxGain = 6.0;
-    yBoost = 1.3;
-  } else if (profile === "accelerated") {
-    panSensitivity = 2.0;
-    deadzone = 0.5;
-    emaAlpha = 0.15;
-    speedGain = 0.12;
-    maxGain = 30.0;
-    yBoost = 2.5;
-  } else {
+    yBoost = 1.4;
+  } else if (profile === "linear-soft") {
     panSensitivity = 1.4;
-    deadzone = 0.3;
-    emaAlpha = 0.25;
-    speedGain = 0.08;
-    maxGain = 20.0;
+    deadzone = 0.6;
+    emaAlpha = 0.30;
+    speedGain = 0.03;
+    maxGain = 4.0;
+    yBoost = 1.3;
+  } else if (profile === "linear-strong") {
+    panSensitivity = 2.4;
+    deadzone = 0.4;
+    emaAlpha = 0.18;
+    speedGain = 0.05;
+    maxGain = 10.0;
     yBoost = 1.6;
+  } else if (profile === "linear-fast") {
+    panSensitivity = 3.2;
+    deadzone = 0.3;
+    emaAlpha = 0.15;
+    speedGain = 0.07;
+    maxGain = 16.0;
+    yBoost = 1.8;
   }
 
   if (panSlider && panValue) {
@@ -699,13 +706,8 @@ function handleGestures(landmarksList, handednessList, width, height) {
 
         const speed = Math.hypot(dx, dy);
         let gain = 1;
-        if (profile === "linear") {
-          gain = clamp(0.8 + speed * speedGain * 40, 0.5, maxGain);
-        } else if (profile === "accelerated") {
-          gain = clamp(1 + Math.pow(speed, 1.7) * speedGain * 2000, 0.4, maxGain);
-        } else {
-          gain = clamp(0.7 + Math.pow(speed, 2.1) * speedGain * 900, 0.4, maxGain);
-        }
+        // Linear-style profiles: only linear acceleration.
+        gain = clamp(0.8 + speed * speedGain * 40, 0.5, maxGain);
         dx = dx * panSensitivity * gain;
         dy = -dy * panSensitivity * gain;
         if (Math.abs(dx) + Math.abs(dy) >= deadzone) {
