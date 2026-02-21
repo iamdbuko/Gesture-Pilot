@@ -595,6 +595,12 @@ function handleGestures(landmarksList, handednessList, width, height) {
     }
 
     if (rightHand) {
+      const openScore = openPalmScore(rightHand);
+      if (openScore < 0.6) {
+        // Ignore zoom when palm is closing to avoid super-zoom.
+        setZoomDebug("—", zoomS0 ? zoomS0.toFixed(3) : "—");
+        return;
+      }
       const s = maxMinArea(rightHand) || 1;
       const ratioRaw = clamp(zoomS0 / s, 0.1, 10);
       zoomRatioEma = 0.7 * zoomRatioEma + 0.3 * ratioRaw;
