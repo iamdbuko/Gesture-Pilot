@@ -432,7 +432,11 @@ function handleGestures(landmarksList, handednessList, width, height) {
   }
 
   const rightIndex = handednessList.findIndex((h) => h && h[0] && h[0].categoryName === "Right");
-  const rightHand = rightIndex >= 0 ? landmarksList[rightIndex] : null;
+  let rightHand = rightIndex >= 0 ? landmarksList[rightIndex] : null;
+  if (!rightHand && handsCount === 1) {
+    // Fallback to the only detected hand to reduce false negatives from handedness flips.
+    rightHand = landmarksList[0];
+  }
 
   // ZOOM_2H has highest priority.
   let openA = false;

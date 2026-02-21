@@ -115,6 +115,15 @@
         background: #1c1c1f;
         color: #ffffff;
       }
+      .badge-overlay {
+        position: absolute;
+        left: 8px;
+        bottom: 8px;
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        z-index: 2;
+      }
     </style>
   </head>
   <body>
@@ -157,13 +166,6 @@
       <p class="subtle" id="gesture-handedness">Handedness: —</p>
       <p class="subtle" id="gesture-zoom">Zoom: S — / S0 —</p>
       <p class="subtle" id="gesture-last">Last cmd: —</p>
-      <div class="row" id="gesture-badges" style="margin-top: 8px;">
-        <span class="badge" id="badge-openpalm">Open Palm</span>
-        <span class="badge" id="badge-indexonly">Index Only</span>
-        <span class="badge" id="badge-thumbs-up">Thumbs Up</span>
-        <span class="badge" id="badge-thumbs-down">Thumbs Down</span>
-        <span class="badge" id="badge-zoom2h">Zoom 2H</span>
-      </div>
       <p class="subtle" id="gesture-status">Gestures disabled</p>
     </div>
 
@@ -172,6 +174,13 @@
       <div class="camera">
         <video id="camera-video" autoplay playsinline muted></video>
         <canvas id="camera-canvas"></canvas>
+        <div class="badge-overlay" id="gesture-badges">
+          <span class="badge" id="badge-openpalm">Open Palm</span>
+          <span class="badge" id="badge-indexonly">Index Only</span>
+          <span class="badge" id="badge-thumbs-up">Thumbs Up</span>
+          <span class="badge" id="badge-thumbs-down">Thumbs Down</span>
+          <span class="badge" id="badge-zoom2h">Zoom 2H</span>
+        </div>
       </div>
       <div class="row" style="margin-top: 8px; align-items: center;">
         <button id="camera-start" class="secondary">Start camera</button>
