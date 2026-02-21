@@ -103,7 +103,7 @@ let speedGain = 0.12;
 let maxGain = 30.0;
 let yBoost = 1.4;
 let activeRadiusPx = 90;
-let profile = "linear-soft";
+let profile = "soft-precision";
 
 function updateGestureStatus() {
   if (gestureStatus) {
@@ -153,34 +153,34 @@ if (panSlider && panValue) {
 
 function applyProfile(nextProfile) {
   profile = nextProfile;
-  if (profile === "linear-soft") {
-    panSensitivity = 1.4;
-    deadzone = 0.6;
-    emaAlpha = 0.30;
-    speedGain = 0.03;
-    maxGain = 4.0;
-    yBoost = 1.3;
-  } else if (profile === "soft-precision") {
+  if (profile === "soft-precision") {
     panSensitivity = 1.2;
     deadzone = 0.8;
     emaAlpha = 0.40;
     speedGain = 0.025;
     maxGain = 3.5;
     yBoost = 1.2;
-  } else if (profile === "soft-balanced") {
-    panSensitivity = 1.6;
-    deadzone = 0.5;
+  } else if (profile === "precision-tight") {
+    panSensitivity = 1.0;
+    deadzone = 1.0;
+    emaAlpha = 0.45;
+    speedGain = 0.020;
+    maxGain = 3.0;
+    yBoost = 1.1;
+  } else if (profile === "precision-balanced") {
+    panSensitivity = 1.4;
+    deadzone = 0.7;
+    emaAlpha = 0.35;
+    speedGain = 0.030;
+    maxGain = 4.5;
+    yBoost = 1.3;
+  } else if (profile === "precision-flow") {
+    panSensitivity = 1.7;
+    deadzone = 0.6;
     emaAlpha = 0.30;
-    speedGain = 0.035;
-    maxGain = 5.0;
-    yBoost = 1.4;
-  } else if (profile === "soft-flow") {
-    panSensitivity = 2.0;
-    deadzone = 0.4;
-    emaAlpha = 0.22;
-    speedGain = 0.045;
-    maxGain = 7.0;
-    yBoost = 1.6;
+    speedGain = 0.040;
+    maxGain = 6.0;
+    yBoost = 1.5;
   }
 
   if (panSlider && panValue) {
