@@ -91,6 +91,9 @@ type RelayState = {
   sessionId: string;
   secret: string;
   intervalId: number | null;
+  active: boolean;
+  inFlight: boolean;
+  pollToken: number;
 };
 
 let relayState: RelayState | null = null;
@@ -115,6 +118,9 @@ function relayDisconnect() {
   if (relayState?.intervalId != null) {
     clearInterval(relayState.intervalId);
   }
+  if (relayState) {
+    relayState.active = false;
+  }
   relayState = null;
   setRelayStatus(false, "Disconnected");
   setRelayError("—");
@@ -134,13 +140,18 @@ async function relayConnect(baseUrl: string, sessionId: string, secret: string) 
     sessionId,
     secret,
     intervalId: null,
+    active: true,
+    inFlight: false,
+    pollToken: Date.now(),
   };
 
   setRelayStatus(true, "Connected");
   setRelayError("—");
 
-  const poll = async () => {
-    if (!relayState) return;
+  const poll = async (token: number) => {
+    if (!relayState || !relayState.active || relayState.pollToken !== token) return;
+    if (relayState.inFlight) return;
+    relayState.inFlight = true;
     try {
       const url =
         `${relayState.baseUrl}/api/pull?sessionId=` +
@@ -157,11 +168,16 @@ async function relayConnect(baseUrl: string, sessionId: string, secret: string) 
     } catch (error) {
       setRelayStatus(false, "Relay error");
       setRelayError(String(error instanceof Error ? error.message : error));
+    } finally {
+      if (relayState) {
+        relayState.inFlight = false;
+      }
     }
   };
 
-  relayState.intervalId = setInterval(poll, 200) as unknown as number;
-  poll();
+  const token = relayState.pollToken;
+  relayState.intervalId = setInterval(() => poll(token), 200) as unknown as number;
+  poll(token);
 }
 
 async function handleRelayCommand(command: any) {

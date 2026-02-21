@@ -70,10 +70,15 @@ createSession();
 const gestureToggle = document.getElementById("enable-gestures");
 const gestureStatus = document.getElementById("gesture-status");
 const gestureMode = document.getElementById("gesture-mode");
-const gestureArmed = document.getElementById("gesture-armed");
 const gestureHands = document.getElementById("gesture-hands");
-const gestureDebug = document.getElementById("gesture-debug");
+const gestureHandedness = document.getElementById("gesture-handedness");
+const gestureZoom = document.getElementById("gesture-zoom");
 const gestureLast = document.getElementById("gesture-last");
+const badgeOpenPalm = document.getElementById("badge-openpalm");
+const badgeIndexOnly = document.getElementById("badge-indexonly");
+const badgeThumbsUp = document.getElementById("badge-thumbs-up");
+const badgeThumbsDown = document.getElementById("badge-thumbs-down");
+const badgeZoom2H = document.getElementById("badge-zoom2h");
 const panSlider = document.getElementById("pan-sensitivity");
 const panValue = document.getElementById("pan-sensitivity-value");
 
@@ -90,23 +95,25 @@ function setMode(label) {
   if (gestureMode) gestureMode.textContent = `Mode: ${label}`;
 }
 
-function setArmed(value) {
-  if (gestureArmed) {
-    gestureArmed.textContent = `ARMED: ${value ? "ON" : "OFF"}`;
-    gestureArmed.classList.toggle("armed-on", value);
-  }
-}
-
 function setHands(count) {
   if (gestureHands) gestureHands.textContent = `Hands: ${count}`;
 }
 
-function setDebug(text) {
-  if (gestureDebug) gestureDebug.textContent = text;
+function setHandedness(text) {
+  if (gestureHandedness) gestureHandedness.textContent = `Handedness: ${text}`;
+}
+
+function setZoomDebug(s, s0) {
+  if (gestureZoom) gestureZoom.textContent = `Zoom: S ${s} / S0 ${s0}`;
 }
 
 function setLastCommand(text) {
   if (gestureLast) gestureLast.textContent = `Last cmd: ${text}`;
+}
+
+function setBadgeActive(el, active) {
+  if (!el) return;
+  el.classList.toggle("active", !!active);
 }
 
 if (gestureToggle) {
@@ -126,7 +133,9 @@ if (panSlider && panValue) {
 
 updateGestureStatus();
 setMode("IDLE");
-setArmed(false);
+setHands(0);
+setHandedness("—");
+setZoomDebug("—", "—");
 
 // Relay queue + batching (max 20 req/s).
 const queue = [];
@@ -236,26 +245,19 @@ const cameraStart = document.getElementById("camera-start");
 let handLandmarker = null;
 let lastVideoTime = -1;
 let lastPanAt = 0;
-let pinchActive = false;
-let pinchStartDist = 0;
-let pinchStartZoom = 1.0;
-let smoothedPalm = null;
-let state = "IDLE";
-let stateSince = 0;
-let armActive = false;
-let openPalmAboveAt = 0;
-let openPalmBelowAt = 0;
-let pinchEnterAt = 0;
-let pinchExitAt = 0;
-let armHoldStartedAt = 0;
-let lastArmToggleAt = 0;
-let twoHandsSeenAt = 0;
-let zoom2HStartDist = 0;
-let zoom2HStartZoom = 1.0;
-let zoom2HLastSeenAt = 0;
-let zoom1HStartZoom = 1.0;
+let smoothedIndex = null;
+let mode = "IDLE";
+let modeSince = 0;
+let panEnterAt = 0;
+let panExitAt = 0;
+let zoomEnterAt = 0;
+let zoomExitAt = 0;
+let zoomS0 = 0;
+let zoomRatioEma = 1.0;
+let zoom0 = 1.0;
 let thumbsHoldAt = 0;
 let thumbsCandidate = "none";
+let lastThumbsAt = { up: 0, down: 0 };
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
@@ -298,12 +300,12 @@ function isOpenPalm(landmarks) {
 }
 
 function openPalmScore(landmarks) {
-  let score = 0;
-  if (isFingerExtended(landmarks, 8, 6)) score += 0.25;
-  if (isFingerExtended(landmarks, 12, 10)) score += 0.25;
-  if (isFingerExtended(landmarks, 16, 14)) score += 0.25;
-  if (isFingerExtended(landmarks, 20, 18)) score += 0.25;
-  return score;
+  let extended = 0;
+  if (isFingerExtended(landmarks, 8, 6)) extended += 1;
+  if (isFingerExtended(landmarks, 12, 10)) extended += 1;
+  if (isFingerExtended(landmarks, 16, 14)) extended += 1;
+  if (isFingerExtended(landmarks, 20, 18)) extended += 1;
+  return extended / 4;
 }
 
 function areOtherFingersCurled(landmarks) {
@@ -346,6 +348,22 @@ function computePalmCenter(landmarks) {
     { x: 0, y: 0 }
   );
   return avg;
+}
+
+function maxMinArea(landmarks) {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  landmarks.forEach((p) => {
+    minX = Math.min(minX, p.x);
+    minY = Math.min(minY, p.y);
+    maxX = Math.max(maxX, p.x);
+    maxY = Math.max(maxY, p.y);
+  });
+  const w = Math.max(maxX - minX, 1e-6);
+  const h = Math.max(maxY - minY, 1e-6);
+  return w * h;
 }
 
 async function initHandLandmarker() {
@@ -392,154 +410,112 @@ function drawLandmarks(ctx, landmarks, width, height) {
   });
 }
 
-function handleGestures(landmarksList, width, height) {
+function handleGestures(landmarksList, handednessList, width, height) {
   const now = Date.now();
   const handsCount = landmarksList.length;
   setHands(handsCount);
+  setHandedness(
+    handednessList
+      .map((h) => (h && h[0] ? h[0].categoryName : "Unknown"))
+      .join(", ") || "—"
+  );
 
-  if (!gesturesEnabled) {
-    state = "IDLE";
-    armActive = false;
-    setArmed(false);
+  if (!gesturesEnabled || handsCount === 0) {
+    mode = "IDLE";
     setMode("IDLE");
     return;
   }
 
-  const primary = landmarksList[0];
-  const armGesture = primary ? isArmGesture(primary) : false;
-  if (armGesture) {
-    if (!armHoldStartedAt) armHoldStartedAt = now;
-    if (now - armHoldStartedAt >= 250 && now - lastArmToggleAt >= 1000) {
-      armActive = !armActive;
-      lastArmToggleAt = now;
-      setArmed(armActive);
+  const rightIndex = handednessList.findIndex((h) => h && h[0] && h[0].categoryName === "Right");
+  const rightHand = rightIndex >= 0 ? landmarksList[rightIndex] : null;
+
+  // ZOOM_2H has highest priority.
+  let openA = false;
+  let openB = false;
+  if (handsCount >= 2) {
+    openA = openPalmScore(landmarksList[0]) >= 0.75;
+    openB = openPalmScore(landmarksList[1]) >= 0.75;
+    if (openA && openB) {
+      if (!zoomEnterAt) zoomEnterAt = now;
+    } else {
+      zoomEnterAt = 0;
     }
   } else {
-    armHoldStartedAt = 0;
+    zoomEnterAt = 0;
   }
 
-  setArmed(armActive);
-  if (!armActive || handsCount === 0) {
-    state = "IDLE";
-    setMode("IDLE");
-    return;
-  }
-
-  // Two-hand zoom detection.
-  if (handsCount >= 2) {
-    if (!twoHandsSeenAt) twoHandsSeenAt = now;
+  if (handsCount < 2 || !openA || !openB) {
+    if (!zoomExitAt) zoomExitAt = now;
   } else {
-    twoHandsSeenAt = 0;
+    zoomExitAt = 0;
   }
 
-  if (handsCount >= 2) {
-    if (!zoom2HLastSeenAt) zoom2HLastSeenAt = now;
-  } else {
-    zoom2HLastSeenAt = now;
-  }
-
-  const canSwitchZoom = now - stateSince >= 400;
-
-  if (handsCount >= 2 && twoHandsSeenAt && now - twoHandsSeenAt >= 150 && (state !== "ZOOM_2H")) {
-    state = "ZOOM_2H";
-    stateSince = now;
-    const c1 = computePalmCenter(landmarksList[0]);
-    const c2 = computePalmCenter(landmarksList[1]);
-    zoom2HStartDist = distance(c1, c2);
-    zoom2HStartZoom = localZoom || 1.0;
-  }
-
-  if (state === "ZOOM_2H") {
-    if (handsCount < 2 && now - zoom2HLastSeenAt >= 200 && canSwitchZoom) {
-      state = "ARMED";
-      stateSince = now;
-    } else if (handsCount >= 2) {
+  if ((mode !== "ZOOM" && handsCount >= 2 && zoomEnterAt && now - zoomEnterAt >= 200) || mode === "ZOOM") {
+    if (mode !== "ZOOM") {
+      mode = "ZOOM";
+      modeSince = now;
       const c1 = computePalmCenter(landmarksList[0]);
       const c2 = computePalmCenter(landmarksList[1]);
-      const d = distance(c1, c2) || 1;
-      const targetZoom = clamp(zoom2HStartZoom * (d / (zoom2HStartDist || d)), 0.1, 6.0);
-      localZoom = targetZoom;
-      emitCommand({ type: "ZOOM", zoom: targetZoom }, `ZOOM_2H ${targetZoom.toFixed(2)}`);
-      setDebug(`Zoom2H D/D0 ${(d / (zoom2HStartDist || d)).toFixed(2)}`);
-      setMode("ZOOM_2H");
+      zoomS0 = ((maxMinArea(landmarksList[0]) + maxMinArea(landmarksList[1])) / 2) || 1;
+      zoom0 = localZoom || 1.0;
+      zoomRatioEma = 1.0;
+      setMode("ZOOM");
+    }
+
+    if (handsCount < 2 && now - modeSince >= 400 && zoomExitAt && now - zoomExitAt >= 150) {
+      mode = "IDLE";
+      setMode("IDLE");
       return;
     }
-  }
 
-  // One-hand pinch zoom (fallback).
-  const thumbDir = detectThumbDirection(primary);
-  const openScore = openPalmScore(primary);
-  const pinchDist = pinchDistanceNormalized(primary);
-
-  if (pinchDist < 0.060) {
-    if (!pinchEnterAt) pinchEnterAt = now;
-  } else {
-    pinchEnterAt = 0;
-  }
-  if (pinchDist > 0.085) {
-    if (!pinchExitAt) pinchExitAt = now;
-  } else {
-    pinchExitAt = 0;
-  }
-
-  if (state !== "ZOOM_2H" && handsCount === 1) {
-    if ((state === "IDLE" || state === "ARMED") && pinchEnterAt && now - pinchEnterAt >= 120) {
-      state = "ZOOM_1H";
-      stateSince = now;
-      pinchActive = false;
-      zoom1HStartZoom = localZoom || 1.0;
-    }
-  }
-
-  if (state === "ZOOM_1H") {
-    if (pinchExitAt && now - pinchExitAt >= 120 && now - stateSince >= 400) {
-      state = "ARMED";
-      stateSince = now;
-      pinchActive = false;
-    } else {
-      const currentDist = pinchDist || 1;
-      if (!pinchActive) {
-        pinchActive = true;
-        pinchStartDist = currentDist;
-        pinchStartZoom = zoom1HStartZoom;
+    if (handsCount >= 2) {
+      const s = ((maxMinArea(landmarksList[0]) + maxMinArea(landmarksList[1])) / 2) || 1;
+      const ratioRaw = clamp(zoomS0 / s, 0.1, 10);
+      zoomRatioEma = 0.7 * zoomRatioEma + 0.3 * ratioRaw;
+      if (Math.abs(zoomRatioEma - 1) > 0.02) {
+        const targetZoom = clamp(zoom0 * zoomRatioEma, 0.1, 6.0);
+        localZoom = targetZoom;
+        emitCommand({ type: "ZOOM", zoom: targetZoom }, `ZOOM ${targetZoom.toFixed(2)}`);
       }
-      const targetZoom = clamp((pinchStartZoom * (pinchStartDist / currentDist)) || 1.0, 0.1, 6.0);
-      localZoom = targetZoom;
-      emitCommand({ type: "ZOOM", zoom: targetZoom }, `ZOOM_1H ${targetZoom.toFixed(2)}`);
-      setDebug(`Zoom1H pinch ${currentDist.toFixed(3)}`);
-      setMode("ZOOM_1H");
-      return;
+      setZoomDebug(s.toFixed(3), zoomS0.toFixed(3));
     }
+    return;
   }
 
-  // PAN (only if not zoom).
-  if (openScore > 0.75) {
-    if (!openPalmAboveAt) openPalmAboveAt = now;
-  } else {
-    openPalmAboveAt = 0;
-  }
-  if (openScore < 0.55) {
-    if (!openPalmBelowAt) openPalmBelowAt = now;
-  } else {
-    openPalmBelowAt = 0;
-  }
+  // PAN (right hand, index only).
+  if (rightHand) {
+    const indexOnly =
+      isFingerExtended(rightHand, 8, 6) &&
+      !isFingerExtended(rightHand, 12, 10) &&
+      !isFingerExtended(rightHand, 16, 14) &&
+      !isFingerExtended(rightHand, 20, 18);
+    if (indexOnly) {
+      if (!panEnterAt) panEnterAt = now;
+    } else {
+      panEnterAt = 0;
+    }
+    if (!indexOnly) {
+      if (!panExitAt) panExitAt = now;
+    } else {
+      panExitAt = 0;
+    }
 
-  if ((state === "IDLE" || state === "ARMED") && openPalmAboveAt && now - openPalmAboveAt >= 200) {
-    state = "PAN";
-    stateSince = now;
-  }
-  if (state === "PAN" && openPalmBelowAt && now - openPalmBelowAt >= 150) {
-    state = "ARMED";
-    stateSince = now;
-  }
+    if ((mode !== "PAN" && panEnterAt && now - panEnterAt >= 150) || mode === "PAN") {
+      if (mode !== "PAN") {
+        mode = "PAN";
+        modeSince = now;
+      }
+      if (!indexOnly && panExitAt && now - panExitAt >= 100) {
+        mode = "IDLE";
+        setMode("IDLE");
+        return;
+      }
 
-  if (state === "PAN") {
-    if (now - lastPanAt >= 50) {
-      const palmCenter = computePalmCenter(primary);
-      const prev = smoothedPalm;
-      const next = ema(smoothedPalm, palmCenter, 0.35);
-      smoothedPalm = next;
-      if (prev && next) {
+      const tip = rightHand[8];
+      const prev = smoothedIndex;
+      const next = ema(smoothedIndex, { x: tip.x, y: tip.y }, 0.35);
+      smoothedIndex = next;
+      if (prev && next && now - lastPanAt >= 50) {
         let dx = (next.x - prev.x) * width * panSensitivity;
         let dy = (next.y - prev.y) * height * panSensitivity;
         if (Math.abs(dx) + Math.abs(dy) >= 3) {
@@ -549,36 +525,38 @@ function handleGestures(landmarksList, width, height) {
           lastPanAt = now;
         }
       }
+      setMode("PAN");
+      return;
     }
-    setMode("PAN");
-    return;
   }
 
-  // Thumbs (only if not zoom and pinchDist is large).
-  const curledCount = countCurledFingers(primary);
-  const thumbExtended = thumbDir !== "none";
-  const allowThumbs = pinchDist > 0.1;
-  let candidate = "none";
-  if (allowThumbs && thumbExtended && curledCount >= 3) {
-    candidate = thumbDir === "up" ? "up" : thumbDir === "down" ? "down" : "none";
-  }
-  if (candidate !== thumbsCandidate) {
-    thumbsCandidate = candidate;
-    thumbsHoldAt = candidate !== "none" ? now : 0;
-  }
-  if (thumbsCandidate !== "none" && thumbsHoldAt && now - thumbsHoldAt >= 300) {
-    if (thumbsCandidate === "up") {
-      emitSticker({ type: "STICKER", kind: "up" }, "STICKER up");
-      setMode("THUMBS_UP");
-    } else if (thumbsCandidate === "down") {
-      emitSticker({ type: "STICKER", kind: "down" }, "STICKER down");
-      setMode("THUMBS_DOWN");
+  // Stickers (right hand thumbs up/down hold).
+  if (rightHand) {
+    const thumbDir = detectThumbDirection(rightHand);
+    const curledCount = countCurledFingers(rightHand);
+    const thumbExtended = thumbDir !== "none";
+    let candidate = "none";
+    if (thumbExtended && curledCount >= 3) {
+      candidate = thumbDir === "up" ? "up" : thumbDir === "down" ? "down" : "none";
     }
-    thumbsHoldAt = 0;
+    if (candidate !== thumbsCandidate) {
+      thumbsCandidate = candidate;
+      thumbsHoldAt = candidate !== "none" ? now : 0;
+      if (candidate === "up") setMode("STICKER_UP_PENDING");
+      if (candidate === "down") setMode("STICKER_DOWN_PENDING");
+    }
+    if (thumbsCandidate !== "none" && thumbsHoldAt && now - thumbsHoldAt >= 1000) {
+      const lastAt = lastThumbsAt[thumbsCandidate] || 0;
+      if (now - lastAt >= 1500) {
+        emitSticker({ type: "STICKER", kind: thumbsCandidate }, `STICKER ${thumbsCandidate}`);
+        lastThumbsAt[thumbsCandidate] = now;
+      }
+      thumbsHoldAt = 0;
+    }
   }
 
-  setDebug(`Pinch ${pinchDist.toFixed(3)}`);
-  setMode(state === "IDLE" ? "ARMED" : state);
+  setZoomDebug("—", "—");
+  setMode("IDLE");
 }
 
 async function startCamera() {
@@ -635,9 +613,11 @@ function drawFrame() {
     const results = handLandmarker.detectForVideo(video, performance.now());
     if (results.landmarks && results.landmarks.length > 0) {
       results.landmarks.forEach((landmarks) => drawLandmarks(ctx, landmarks, width, height));
-      handleGestures(results.landmarks, width, height);
+      handleGestures(results.landmarks, results.handednesses || [], width, height);
     } else {
       setHands(0);
+      setHandedness("—");
+      setZoomDebug("—", "—");
       setMode("IDLE");
     }
   }

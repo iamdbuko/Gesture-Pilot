@@ -104,6 +104,17 @@
       .armed-on {
         color: #0f8b3a;
       }
+      .badge {
+        font-size: 11px;
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: #eceef4;
+        color: #596070;
+      }
+      .badge.active {
+        background: #1c1c1f;
+        color: #ffffff;
+      }
     </style>
   </head>
   <body>
@@ -141,12 +152,18 @@
         <input id="pan-sensitivity" type="range" min="0.5" max="3" step="0.1" value="1.2" />
         <span id="pan-sensitivity-value" class="subtle">1.2</span>
       </div>
-      <p class="armed-indicator" id="gesture-armed">ARMED: OFF</p>
-      <p class="subtle">Show ✌️ to toggle control</p>
       <p class="subtle" id="gesture-mode">Mode: IDLE</p>
       <p class="subtle" id="gesture-hands">Hands: 0</p>
-      <p class="subtle" id="gesture-debug">Zoom: —</p>
+      <p class="subtle" id="gesture-handedness">Handedness: —</p>
+      <p class="subtle" id="gesture-zoom">Zoom: S — / S0 —</p>
       <p class="subtle" id="gesture-last">Last cmd: —</p>
+      <div class="row" id="gesture-badges" style="margin-top: 8px;">
+        <span class="badge" id="badge-openpalm">Open Palm</span>
+        <span class="badge" id="badge-indexonly">Index Only</span>
+        <span class="badge" id="badge-thumbs-up">Thumbs Up</span>
+        <span class="badge" id="badge-thumbs-down">Thumbs Down</span>
+        <span class="badge" id="badge-zoom2h">Zoom 2H</span>
+      </div>
       <p class="subtle" id="gesture-status">Gestures disabled</p>
     </div>
 
