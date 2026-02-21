@@ -5,6 +5,8 @@ const UI_HEIGHT = 360;
 
 figma.showUI(__html__, { width: UI_WIDTH, height: UI_HEIGHT });
 
+figma.ui.postMessage({ type: "RELAY_STATUS", connected: false, message: "Main build: 2026-02-21-23:55" });
+
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
@@ -56,7 +58,7 @@ figma.ui.onmessage = async (message: UiToMainMessage) => {
       break;
     }
     case "RELAY_CONNECT": {
-      await relayConnect(message.baseUrl, message.sessionId, message.secret, message.wsUrl);
+      await relayConnect(message.baseUrl, message.sessionId, message.secret);
       break;
     }
     case "RELAY_DISCONNECT": {
@@ -90,12 +92,12 @@ type RelayState = {
   baseUrl: string;
   sessionId: string;
   secret: string;
-  wsUrl?: string;
-  ws?: WebSocket | null;
   intervalId: number | null;
   active: boolean;
   inFlight: boolean;
   pollToken: number;
+  lastCommandAt: number;
+  currentPollMs: number;
 };
 
 let relayState: RelayState | null = null;
@@ -113,15 +115,11 @@ function setLastCommand(command: string) {
 }
 
 function setRelayError(message: string) {
-  postUi({ type: "RELAY_ERROR", message });
+  const text = typeof message === "string" ? message : JSON.stringify(message);
+  postUi({ type: "RELAY_ERROR", message: text });
 }
 
 function relayDisconnect() {
-  if (relayState?.ws) {
-    try {
-      relayState.ws.close();
-    } catch {}
-  }
   if (relayState?.intervalId != null) {
     clearTimeout(relayState.intervalId);
   }
@@ -133,7 +131,7 @@ function relayDisconnect() {
   setRelayError("—");
 }
 
-async function relayConnect(baseUrl: string, sessionId: string, secret: string, wsUrl?: string) {
+async function relayConnect(baseUrl: string, sessionId: string, secret: string) {
   relayDisconnect();
 
   if (!baseUrl || !sessionId || !secret) {
@@ -146,49 +144,24 @@ async function relayConnect(baseUrl: string, sessionId: string, secret: string, 
     baseUrl: baseUrl.replace(/\/$/, ""),
     sessionId,
     secret,
-    wsUrl: wsUrl && wsUrl.trim() ? wsUrl.trim() : undefined,
-    ws: null,
     intervalId: null,
     active: true,
     inFlight: false,
     pollToken: Date.now(),
+    lastCommandAt: 0,
+    currentPollMs: 80,
   };
 
   setRelayStatus(true, `Connected (${sessionId})`);
   setRelayError("—");
 
-  if (relayState.wsUrl) {
-    try {
-      const ws = new WebSocket(relayState.wsUrl);
-      relayState.ws = ws;
-      ws.onopen = () => {
-        ws.send(JSON.stringify({ type: "hello", role: "sink", sessionId, secret }));
-      };
-      ws.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data);
-          if (msg && msg.type === "hello" && msg.ok) {
-            setRelayStatus(true, `WS connected (${sessionId})`);
-            return;
-          }
-          handleRelayCommand(msg);
-        } catch {}
-      };
-      ws.onerror = () => {
-        setRelayStatus(true, `Polling (${sessionId})`);
-      };
-      ws.onclose = () => {
-        setRelayStatus(true, `Polling (${sessionId})`);
-      };
-    } catch {
-      setRelayStatus(true, `Polling (${sessionId})`);
-    }
-  }
+  const ACTIVE_POLL_MS = 80;
+  const IDLE_POLL_MS = 500;
 
   const poll = async (token: number) => {
     if (!relayState || !relayState.active || relayState.pollToken !== token) return;
     if (relayState.inFlight) {
-      relayState.intervalId = setTimeout(() => poll(token), 200) as unknown as number;
+      relayState.intervalId = setTimeout(() => poll(token), relayState.currentPollMs) as unknown as number;
       return;
     }
     relayState.inFlight = true;
@@ -202,7 +175,16 @@ async function relayConnect(baseUrl: string, sessionId: string, secret: string, 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Relay pull failed");
       const commands = Array.isArray(data.commands) ? data.commands : [];
-      setRelayStatus(true, `Connected (${relayState.sessionId})`);
+      if (commands.length > 0) {
+        relayState.lastCommandAt = Date.now();
+        relayState.currentPollMs = ACTIVE_POLL_MS;
+        figma.ui.postMessage({ type: "RELAY_POLL", mode: "ACTIVE", intervalMs: relayState.currentPollMs });
+      } else {
+        if (relayState.lastCommandAt && Date.now() - relayState.lastCommandAt > 2000) {
+          relayState.currentPollMs = IDLE_POLL_MS;
+          figma.ui.postMessage({ type: "RELAY_POLL", mode: "IDLE", intervalMs: relayState.currentPollMs });
+        }
+      }
       for (const cmd of commands) {
         await handleRelayCommand(cmd);
       }
@@ -213,16 +195,18 @@ async function relayConnect(baseUrl: string, sessionId: string, secret: string, 
         setRelayStatus(true, `Polling (${relayState.sessionId})`);
         setRelayError(msg);
       }
+      relayState.currentPollMs = Math.min(relayState.currentPollMs * 2, 2000);
+      figma.ui.postMessage({ type: "RELAY_POLL", mode: "IDLE", intervalMs: relayState.currentPollMs });
     } finally {
       if (relayState) {
         relayState.inFlight = false;
-        relayState.intervalId = setTimeout(() => poll(token), 200) as unknown as number;
+        relayState.intervalId = setTimeout(() => poll(token), relayState.currentPollMs) as unknown as number;
       }
     }
   };
 
   const token = relayState.pollToken;
-  relayState.intervalId = setTimeout(() => poll(token), 200) as unknown as number;
+  relayState.intervalId = setTimeout(() => poll(token), relayState.currentPollMs) as unknown as number;
   poll(token);
 }
 

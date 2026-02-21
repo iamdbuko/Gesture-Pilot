@@ -50,6 +50,12 @@ export type RelayErrorMessage = {
   message: string;
 };
 
+export type RelayPollMessage = {
+  type: "RELAY_POLL";
+  mode: "ACTIVE" | "IDLE";
+  intervalMs: number;
+};
+
 export type UiToMainMessage =
   | PanMessage
   | ZoomMessage
@@ -61,4 +67,5 @@ export type MainToUiMessage =
   | PongMessage
   | RelayStatusMessage
   | RelayLastCommandMessage
-  | RelayErrorMessage;
+  | RelayErrorMessage
+  | RelayPollMessage;
