@@ -70,6 +70,7 @@ createSession();
 const gestureToggle = document.getElementById("enable-gestures");
 const gestureStatus = document.getElementById("gesture-status");
 const gestureMode = document.getElementById("gesture-mode");
+const gestureArmed = document.getElementById("gesture-armed");
 const panSlider = document.getElementById("pan-sensitivity");
 const panValue = document.getElementById("pan-sensitivity-value");
 
@@ -84,6 +85,10 @@ function updateGestureStatus() {
 
 function setMode(label) {
   if (gestureMode) gestureMode.textContent = `Mode: ${label}`;
+}
+
+function setArmed(value) {
+  if (gestureArmed) gestureArmed.textContent = `Armed: ${value ? "ON" : "OFF"}`;
 }
 
 if (gestureToggle) {
@@ -103,6 +108,7 @@ if (panSlider && panValue) {
 
 updateGestureStatus();
 setMode("IDLE");
+setArmed(false);
 
 // Relay queue + batching (max 20 req/s).
 const queue = [];
@@ -206,6 +212,14 @@ let pinchActive = false;
 let pinchStartDist = 0;
 let pinchStartZoom = 1.0;
 let smoothedPalm = null;
+let state = "IDLE";
+let stateSince = 0;
+let lastArmSeenAt = 0;
+let armActive = false;
+let openPalmAboveAt = 0;
+let openPalmBelowAt = 0;
+let pinchEnterAt = 0;
+let pinchExitAt = 0;
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
@@ -247,6 +261,15 @@ function isOpenPalm(landmarks) {
   );
 }
 
+function openPalmScore(landmarks) {
+  let score = 0;
+  if (isFingerExtended(landmarks, 8, 6)) score += 0.25;
+  if (isFingerExtended(landmarks, 12, 10)) score += 0.25;
+  if (isFingerExtended(landmarks, 16, 14)) score += 0.25;
+  if (isFingerExtended(landmarks, 20, 18)) score += 0.25;
+  return score;
+}
+
 function areOtherFingersCurled(landmarks) {
   return (
     !isFingerExtended(landmarks, 8, 6) &&
@@ -254,6 +277,14 @@ function areOtherFingersCurled(landmarks) {
     !isFingerExtended(landmarks, 16, 14) &&
     !isFingerExtended(landmarks, 20, 18)
   );
+}
+
+function isArmGesture(landmarks) {
+  const indexExt = isFingerExtended(landmarks, 8, 6);
+  const middleExt = isFingerExtended(landmarks, 12, 10);
+  const ringCurled = !isFingerExtended(landmarks, 16, 14);
+  const pinkyCurled = !isFingerExtended(landmarks, 20, 18);
+  return indexExt && middleExt && ringCurled && pinkyCurled;
 }
 
 function detectPinch(landmarks) {
@@ -318,18 +349,115 @@ function drawLandmarks(ctx, landmarks, width, height) {
 }
 
 function handleGestures(landmarks, width, height) {
+  const now = Date.now();
   if (!gesturesEnabled) {
+    state = "IDLE";
+    armActive = false;
+    setArmed(false);
     setMode("IDLE");
     return;
   }
 
-  const pinch = detectPinch(landmarks);
+  const armGesture = isArmGesture(landmarks);
+  if (armGesture) {
+    lastArmSeenAt = now;
+  }
+  if (now - lastArmSeenAt > 200) {
+    armActive = false;
+  } else {
+    armActive = true;
+  }
+
+  setArmed(armActive);
+  if (!armActive) {
+    state = "IDLE";
+    setMode("IDLE");
+    return;
+  }
+
   const thumbDir = detectThumbDirection(landmarks);
   const otherCurled = areOtherFingersCurled(landmarks);
+  const openScore = openPalmScore(landmarks);
 
-  if (pinch) {
-    const thumb = landmarks[4];
-    const index = landmarks[8];
+  if (openScore > 0.75) {
+    if (!openPalmAboveAt) openPalmAboveAt = now;
+  } else {
+    openPalmAboveAt = 0;
+  }
+  if (openScore < 0.55) {
+    if (!openPalmBelowAt) openPalmBelowAt = now;
+  } else {
+    openPalmBelowAt = 0;
+  }
+
+  const thumb = landmarks[4];
+  const index = landmarks[8];
+  const handScale = distance(landmarks[0], landmarks[9]);
+  const pinchDist = distance(thumb, index) / (handScale || 1);
+  const pinchEnterThreshold = 0.045;
+  const pinchExitThreshold = 0.06;
+
+  if (pinchDist < pinchEnterThreshold) {
+    if (!pinchEnterAt) pinchEnterAt = now;
+  } else {
+    pinchEnterAt = 0;
+  }
+  if (pinchDist > pinchExitThreshold) {
+    if (!pinchExitAt) pinchExitAt = now;
+  } else {
+    pinchExitAt = 0;
+  }
+
+  const locked = now - stateSince < 250;
+
+  if (state === "IDLE" || state === "ARMED") {
+    if (pinchEnterAt && now - pinchEnterAt >= 120 && !locked) {
+      state = "ZOOM";
+      stateSince = now;
+      pinchActive = false;
+    } else if (openPalmAboveAt && now - openPalmAboveAt >= 200 && !locked) {
+      state = "PAN";
+      stateSince = now;
+    } else {
+      state = "ARMED";
+    }
+  }
+
+  if (state === "PAN") {
+    if ((openPalmBelowAt && now - openPalmBelowAt >= 150) || !armActive) {
+      state = "ARMED";
+      stateSince = now;
+    }
+  }
+
+  if (state === "ZOOM") {
+    if ((pinchExitAt && now - pinchExitAt >= 120) || !armActive) {
+      state = "ARMED";
+      stateSince = now;
+      pinchActive = false;
+    }
+  }
+
+  if (state === "PAN") {
+    if (now - lastPanAt >= 50) {
+      const palmCenter = computePalmCenter(landmarks);
+      const prev = smoothedPalm;
+      const next = ema(smoothedPalm, palmCenter, 0.35);
+      smoothedPalm = next;
+      if (prev && next) {
+        let dx = (next.x - prev.x) * width * panSensitivity;
+        let dy = (next.y - prev.y) * height * panSensitivity;
+        if (Math.abs(dx) + Math.abs(dy) >= 3) {
+          dx = clamp(dx, -30, 30);
+          dy = clamp(dy, -30, 30);
+          enqueueCommand({ type: "PAN", dx, dy });
+          lastPanAt = now;
+        }
+      }
+    }
+  }
+
+  if (state === "ZOOM") {
     const currentDist = distance(thumb, index);
     if (!pinchActive) {
       pinchActive = true;
@@ -339,46 +467,20 @@ function handleGestures(landmarks, width, height) {
     const targetZoom = clamp((pinchStartZoom * (pinchStartDist / currentDist)) || 1.0, 0.1, 6.0);
     localZoom = targetZoom;
     enqueueCommand({ type: "ZOOM", zoom: targetZoom });
-    setMode("ZOOM");
-    return;
   }
-
-  pinchActive = false;
 
   if (thumbDir === "up" && otherCurled) {
     enqueueSticker({ type: "STICKER", kind: "up" });
     setMode("THUMBS_UP");
     return;
   }
-
   if (thumbDir === "down" && otherCurled) {
     enqueueSticker({ type: "STICKER", kind: "down" });
     setMode("THUMBS_DOWN");
     return;
   }
 
-  if (isOpenPalm(landmarks)) {
-    const now = Date.now();
-    if (now - lastPanAt >= 50) {
-      const palmCenter = computePalmCenter(landmarks);
-      smoothedPalm = ema(smoothedPalm, palmCenter, 0.35);
-      const prev = smoothedPalm;
-      const next = ema(prev, palmCenter, 0.35);
-      if (prev && next) {
-        const dx = (next.x - prev.x) * width * panSensitivity;
-        const dy = (next.y - prev.y) * height * panSensitivity;
-        if (Math.abs(dx) > 0.2 || Math.abs(dy) > 0.2) {
-          enqueueCommand({ type: "PAN", dx, dy });
-          lastPanAt = now;
-        }
-      }
-      smoothedPalm = next;
-    }
-    setMode("PAN");
-    return;
-  }
-
-  setMode("IDLE");
+  setMode(state);
 }
 
 async function startCamera() {
