@@ -88,6 +88,8 @@ const emaAlphaInput = document.getElementById("ema-alpha");
 const emaAlphaValue = document.getElementById("ema-alpha-value");
 const speedGainInput = document.getElementById("speed-gain");
 const speedGainValue = document.getElementById("speed-gain-value");
+const fastBoostInput = document.getElementById("fast-boost");
+const fastBoostValue = document.getElementById("fast-boost-value");
 const maxGainInput = document.getElementById("max-gain");
 const maxGainValue = document.getElementById("max-gain-value");
 const yBoostInput = document.getElementById("y-boost");
@@ -100,7 +102,8 @@ let clutchDelayMs = 200;
 let deadzone = 0.8;
 let emaAlpha = 0.4;
 let speedGain = 0.03;
-let maxGain = 4.0;
+let fastBoost = 600;
+let maxGain = 80.0;
 let yBoost = 1.2;
 let activeRadiusPx = 90;
 
@@ -202,6 +205,13 @@ if (speedGainInput && speedGainValue) {
   speedGainInput.addEventListener("input", () => {
     speedGain = Number(speedGainInput.value) || 0.03;
     speedGainValue.textContent = speedGain.toFixed(3);
+  });
+}
+
+if (fastBoostInput && fastBoostValue) {
+  fastBoostInput.addEventListener("input", () => {
+    fastBoost = Number(fastBoostInput.value) || 0;
+    fastBoostValue.textContent = String(Math.round(fastBoost));
   });
 }
 
@@ -667,7 +677,7 @@ function handleGestures(landmarksList, handednessList, width, height) {
         let dy = (next.y - prev.y) * height * yBoost;
 
         const speed = Math.hypot(dx, dy);
-        const gain = clamp(0.8 + speed * speedGain * 40, 0.5, maxGain);
+        const gain = clamp(0.8 + speed * speedGain * 40 + speed * speed * (fastBoost / 1000), 0.5, maxGain);
         dx = dx * panSensitivity * gain;
         dy = -dy * panSensitivity * gain;
         if (Math.abs(dx) + Math.abs(dy) >= deadzone) {
