@@ -638,7 +638,9 @@ function handleGestures(landmarksList, handednessList, width, height) {
         let dy = (next.y - prev.y) * height * yBoost;
 
         const speed = Math.hypot(dx, dy);
-        const gain = clamp(0.4 + speed * speedGain, 0.4, maxGain);
+        // Stronger acceleration curve for fast moves.
+        const accel = 1 + speed * speedGain + speed * speed * speedGain * 0.02;
+        const gain = clamp(accel, 0.4, maxGain);
         dx = dx * panSensitivity * gain;
         dy = dy * panSensitivity * gain;
         if (Math.abs(dx) + Math.abs(dy) >= deadzone) {
