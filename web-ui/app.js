@@ -92,18 +92,17 @@ const maxGainInput = document.getElementById("max-gain");
 const maxGainValue = document.getElementById("max-gain-value");
 const yBoostInput = document.getElementById("y-boost");
 const yBoostValue = document.getElementById("y-boost-value");
-const profileSelect = document.getElementById("profile");
 
 let gesturesEnabled = false;
+// Soft Precision defaults (tuned baseline).
 let panSensitivity = 1.2;
-let clutchDelayMs = 250;
-let deadzone = 1.5;
-let emaAlpha = 0.22;
-let speedGain = 0.12;
-let maxGain = 30.0;
-let yBoost = 1.4;
+let clutchDelayMs = 200;
+let deadzone = 0.8;
+let emaAlpha = 0.4;
+let speedGain = 0.03;
+let maxGain = 4.0;
+let yBoost = 1.2;
 let activeRadiusPx = 90;
-let profile = "soft-precision";
 
 function updateGestureStatus() {
   if (gestureStatus) {
@@ -151,38 +150,7 @@ if (panSlider && panValue) {
   });
 }
 
-function applyProfile(nextProfile) {
-  profile = nextProfile;
-  if (profile === "soft-precision") {
-    panSensitivity = 1.2;
-    deadzone = 0.8;
-    emaAlpha = 0.40;
-    speedGain = 0.025;
-    maxGain = 3.5;
-    yBoost = 1.2;
-  } else if (profile === "precision-tight") {
-    panSensitivity = 1.0;
-    deadzone = 1.0;
-    emaAlpha = 0.45;
-    speedGain = 0.020;
-    maxGain = 3.0;
-    yBoost = 1.1;
-  } else if (profile === "precision-balanced") {
-    panSensitivity = 1.4;
-    deadzone = 0.7;
-    emaAlpha = 0.35;
-    speedGain = 0.030;
-    maxGain = 4.5;
-    yBoost = 1.3;
-  } else if (profile === "precision-flow") {
-    panSensitivity = 1.7;
-    deadzone = 0.6;
-    emaAlpha = 0.30;
-    speedGain = 0.040;
-    maxGain = 6.0;
-    yBoost = 1.5;
-  }
-
+function syncTunablesUI() {
   if (panSlider && panValue) {
     panSlider.value = String(panSensitivity);
     panValue.textContent = panSensitivity.toFixed(1);
@@ -207,12 +175,6 @@ function applyProfile(nextProfile) {
     yBoostInput.value = String(yBoost);
     yBoostValue.textContent = yBoost.toFixed(1);
   }
-}
-
-if (profileSelect) {
-  profileSelect.addEventListener("change", () => {
-    applyProfile(profileSelect.value);
-  });
 }
 
 if (clutchDelayInput && clutchDelayValue) {
@@ -263,7 +225,7 @@ setMode("IDLE");
 setHands(0);
 setHandedness("—");
 setZoomDebug("—", "—");
-applyProfile(profile);
+syncTunablesUI();
 
 // Relay queue + batching (max 20 req/s).
 const queue = [];
@@ -705,9 +667,7 @@ function handleGestures(landmarksList, handednessList, width, height) {
         let dy = (next.y - prev.y) * height * yBoost;
 
         const speed = Math.hypot(dx, dy);
-        let gain = 1;
-        // Linear-style profiles: only linear acceleration.
-        gain = clamp(0.8 + speed * speedGain * 40, 0.5, maxGain);
+        const gain = clamp(0.8 + speed * speedGain * 40, 0.5, maxGain);
         dx = dx * panSensitivity * gain;
         dy = -dy * panSensitivity * gain;
         if (Math.abs(dx) + Math.abs(dy) >= deadzone) {
