@@ -358,6 +358,7 @@ let zoomExitAt = 0;
 let zoomS0 = 0;
 let zoomRatioEma = 1.0;
 let zoom0 = 1.0;
+let zoomWarmupUntil = 0;
 let thumbsHoldAt = 0;
 let thumbsCandidate = "none";
 let lastThumbsAt = { up: 0, down: 0 };
@@ -581,6 +582,7 @@ function handleGestures(landmarksList, handednessList, width, height) {
       zoomS0 = maxMinArea(rightHand) || 1;
       zoom0 = localZoom || 1.0;
       zoomRatioEma = 1.0;
+      zoomWarmupUntil = now + 250;
       setMode("ZOOM");
     }
     setBadgeActive(badgeZoom2H, true);
@@ -596,8 +598,8 @@ function handleGestures(landmarksList, handednessList, width, height) {
       const s = maxMinArea(rightHand) || 1;
       const ratioRaw = clamp(zoomS0 / s, 0.1, 10);
       zoomRatioEma = 0.7 * zoomRatioEma + 0.3 * ratioRaw;
-      // Only emit zoom when size change is meaningful (deadzone).
-      if (Math.abs(zoomRatioEma - 1) > 0.03) {
+      // Only emit zoom after warmup and when size change is meaningful.
+      if (now >= zoomWarmupUntil && Math.abs(zoomRatioEma - 1) > 0.03) {
         const targetZoom = clamp(zoom0 * zoomRatioEma, 0.1, 6.0);
         localZoom = targetZoom;
         emitCommand({ type: "ZOOM", zoom: targetZoom }, `ZOOM ${targetZoom.toFixed(2)}`);
