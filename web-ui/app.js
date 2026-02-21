@@ -405,7 +405,7 @@ function isOkGesture(landmarks) {
   const indexTip = landmarks[8];
   const handScale = distance(landmarks[0], landmarks[9]) || 1;
   const pinch = distance(thumbTip, indexTip) / handScale;
-  return pinch < 0.08;
+  return pinch < 0.12;
 }
 
 function pinchDistanceNormalized(landmarks) {
