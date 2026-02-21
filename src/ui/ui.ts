@@ -14,10 +14,16 @@ const statusText = document.getElementById("relay-status");
 const lastCommand = document.getElementById("relay-last");
 const lastError = document.getElementById("relay-error");
 
+if (statusText) {
+  statusText.textContent = "UI loaded";
+}
+
 connectBtn?.addEventListener("click", () => {
   const baseUrl = relayUrlInput?.value.trim() || "";
   const sessionId = relaySessionInput?.value.trim() || "";
   const secret = relaySecretInput?.value.trim() || "";
+  if (statusText) statusText.textContent = "Connecting…";
+  if (lastError) lastError.textContent = "Last error: —";
   postMessage({ type: "RELAY_CONNECT", baseUrl, sessionId, secret });
 });
 

@@ -1,6 +1,7 @@
-const PAN_STEP = 120;
+import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
 
 const RELAY_BASE_URL = "https://gesture-pilot-relay.vercel.app";
+const PAN_STEP = 120;
 
 // Relay status.
 const connDot = document.getElementById("conn-dot");
@@ -24,9 +25,6 @@ function setRelayError(message) {
   relayError.hidden = false;
   relayError.textContent = message;
 }
-
-setConnected(false);
-if (connText) connText.textContent = "Relay connecting…";
 
 const pairingCode = document.getElementById("pairing-code");
 const pairingSecret = document.getElementById("pairing-secret");
@@ -68,53 +66,43 @@ copySecret && copySecret.addEventListener("click", () => copyText(secret));
 
 createSession();
 
-// Gestures toggle (UI-only).
+// Gestures toggle.
 const gestureToggle = document.getElementById("enable-gestures");
 const gestureStatus = document.getElementById("gesture-status");
-if (gestureToggle && gestureStatus) {
-  const updateStatus = () => {
-    gestureStatus.textContent = gestureToggle.checked ? "Gestures enabled" : "Gestures disabled";
-  };
-  gestureToggle.addEventListener("change", updateStatus);
-  updateStatus();
+const gestureMode = document.getElementById("gesture-mode");
+const panSlider = document.getElementById("pan-sensitivity");
+const panValue = document.getElementById("pan-sensitivity-value");
+
+let gesturesEnabled = false;
+let panSensitivity = 1.2;
+
+function updateGestureStatus() {
+  if (gestureStatus) {
+    gestureStatus.textContent = gesturesEnabled ? "Gestures enabled" : "Gestures disabled";
+  }
 }
 
-// Pan buttons.
-const panButtons = document.querySelectorAll("button[data-pan]");
-panButtons.forEach((button) => {
-  button.addEventListener("click", () => {
-    const dir = button.dataset.pan;
-    let dx = 0;
-    let dy = 0;
-    if (dir === "up") dy = -PAN_STEP;
-    if (dir === "down") dy = PAN_STEP;
-    if (dir === "left") dx = -PAN_STEP;
-    if (dir === "right") dx = PAN_STEP;
-    enqueueCommand({ type: "PAN", dx, dy });
-  });
-});
+function setMode(label) {
+  if (gestureMode) gestureMode.textContent = `Mode: ${label}`;
+}
 
-// Zoom control.
-const zoomInput = document.getElementById("zoom-value");
-const zoomSet = document.getElementById("zoom-set");
-if (zoomInput && zoomSet) {
-  zoomSet.addEventListener("click", () => {
-    const zoom = Number(zoomInput.value) || 1;
-    enqueueCommand({ type: "ZOOM", zoom });
+if (gestureToggle) {
+  gesturesEnabled = gestureToggle.checked;
+  gestureToggle.addEventListener("change", () => {
+    gesturesEnabled = gestureToggle.checked;
+    updateGestureStatus();
   });
 }
 
-// Stickers.
-const stickerUp = document.getElementById("sticker-up");
-const stickerDown = document.getElementById("sticker-down");
+if (panSlider && panValue) {
+  panSlider.addEventListener("input", () => {
+    panSensitivity = Number(panSlider.value) || 1.0;
+    panValue.textContent = panSensitivity.toFixed(1);
+  });
+}
 
-stickerUp && stickerUp.addEventListener("click", () => {
-  enqueueSticker({ type: "STICKER", kind: "up" });
-});
-
-stickerDown && stickerDown.addEventListener("click", () => {
-  enqueueSticker({ type: "STICKER", kind: "down" });
-});
+updateGestureStatus();
+setMode("IDLE");
 
 // Relay queue + batching (max 20 req/s).
 const queue = [];
@@ -164,46 +152,261 @@ setInterval(() => {
   flushQueue();
 }, 50);
 
-// Camera preview + canvas overlay.
+// Manual controls (still available).
+const panButtons = document.querySelectorAll("button[data-pan]");
+panButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    const dir = button.dataset.pan;
+    let dx = 0;
+    let dy = 0;
+    if (dir === "up") dy = -PAN_STEP;
+    if (dir === "down") dy = PAN_STEP;
+    if (dir === "left") dx = -PAN_STEP;
+    if (dir === "right") dx = PAN_STEP;
+    enqueueCommand({ type: "PAN", dx, dy });
+  });
+});
+
+const zoomInput = document.getElementById("zoom-value");
+const zoomSet = document.getElementById("zoom-set");
+let localZoom = 1.0;
+
+if (zoomInput && zoomSet) {
+  zoomSet.addEventListener("click", () => {
+    const zoom = Number(zoomInput.value) || 1;
+    localZoom = zoom;
+    enqueueCommand({ type: "ZOOM", zoom });
+  });
+}
+
+const stickerUp = document.getElementById("sticker-up");
+const stickerDown = document.getElementById("sticker-down");
+
+stickerUp && stickerUp.addEventListener("click", () => {
+  enqueueSticker({ type: "STICKER", kind: "up" });
+  setMode("THUMBS_UP");
+});
+
+stickerDown && stickerDown.addEventListener("click", () => {
+  enqueueSticker({ type: "STICKER", kind: "down" });
+  setMode("THUMBS_DOWN");
+});
+
+// Camera preview + landmark overlay.
 const video = document.getElementById("camera-video");
 const canvas = document.getElementById("camera-canvas");
 const cameraError = document.getElementById("camera-error");
 const cameraDiag = document.getElementById("camera-diagnostic");
 const cameraStart = document.getElementById("camera-start");
 
-if (video && canvas && cameraError) {
-  const ctx = canvas.getContext("2d");
-  let lastFrameTime = 0;
+let handLandmarker = null;
+let lastVideoTime = -1;
+let lastPanAt = 0;
+let pinchActive = false;
+let pinchStartDist = 0;
+let pinchStartZoom = 1.0;
+let smoothedPalm = null;
 
-  const drawFrame = (time) => {
-    // Throttle to ~30fps.
-    if (time - lastFrameTime >= 33) {
-      lastFrameTime = time;
-      if (ctx && video.readyState >= 2) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      }
-    }
-    requestAnimationFrame(drawFrame);
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function distance(a, b) {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+function ema(prev, next, alpha) {
+  if (!prev) return next;
+  return {
+    x: prev.x + alpha * (next.x - prev.x),
+    y: prev.y + alpha * (next.y - prev.y),
   };
+}
 
-  const startCamera = async () => {
-    try {
-      const mediaDevices = navigator.mediaDevices;
-      if (!mediaDevices || !mediaDevices.getUserMedia) {
+function isFingerExtended(landmarks, tip, pip) {
+  return landmarks[tip].y < landmarks[pip].y;
+}
+
+function detectThumbDirection(landmarks) {
+  const tip = landmarks[4];
+  const mcp = landmarks[2];
+  const dy = tip.y - mcp.y;
+  if (dy < -0.08) return "up";
+  if (dy > 0.08) return "down";
+  return "none";
+}
+
+function isOpenPalm(landmarks) {
+  return (
+    isFingerExtended(landmarks, 8, 6) &&
+    isFingerExtended(landmarks, 12, 10) &&
+    isFingerExtended(landmarks, 16, 14) &&
+    isFingerExtended(landmarks, 20, 18)
+  );
+}
+
+function areOtherFingersCurled(landmarks) {
+  return (
+    !isFingerExtended(landmarks, 8, 6) &&
+    !isFingerExtended(landmarks, 12, 10) &&
+    !isFingerExtended(landmarks, 16, 14) &&
+    !isFingerExtended(landmarks, 20, 18)
+  );
+}
+
+function detectPinch(landmarks) {
+  const thumb = landmarks[4];
+  const index = landmarks[8];
+  const handScale = distance(landmarks[0], landmarks[9]);
+  const pinchDist = distance(thumb, index);
+  return pinchDist < handScale * 0.25;
+}
+
+function computePalmCenter(landmarks) {
+  const points = [landmarks[0], landmarks[5], landmarks[9], landmarks[13], landmarks[17]];
+  const avg = points.reduce(
+    (acc, p) => ({ x: acc.x + p.x / points.length, y: acc.y + p.y / points.length }),
+    { x: 0, y: 0 }
+  );
+  return avg;
+}
+
+async function initHandLandmarker() {
+  const vision = await FilesetResolver.forVisionTasks(
+    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+  );
+  handLandmarker = await HandLandmarker.createFromOptions(vision, {
+    baseOptions: {
+      modelAssetPath:
+        "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+    },
+    runningMode: "VIDEO",
+    numHands: 1,
+  });
+}
+
+function drawLandmarks(ctx, landmarks, width, height) {
+  ctx.strokeStyle = "rgba(48,185,90,0.8)";
+  ctx.fillStyle = "rgba(48,185,90,0.9)";
+  ctx.lineWidth = 2;
+
+  const connections = [
+    [0, 1], [1, 2], [2, 3], [3, 4],
+    [0, 5], [5, 6], [6, 7], [7, 8],
+    [0, 9], [9, 10], [10, 11], [11, 12],
+    [0, 13], [13, 14], [14, 15], [15, 16],
+    [0, 17], [17, 18], [18, 19], [19, 20],
+    [5, 9], [9, 13], [13, 17],
+  ];
+
+  connections.forEach(([a, b]) => {
+    const p1 = landmarks[a];
+    const p2 = landmarks[b];
+    ctx.beginPath();
+    ctx.moveTo(p1.x * width, p1.y * height);
+    ctx.lineTo(p2.x * width, p2.y * height);
+    ctx.stroke();
+  });
+
+  landmarks.forEach((p) => {
+    ctx.beginPath();
+    ctx.arc(p.x * width, p.y * height, 4, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
+function handleGestures(landmarks, width, height) {
+  if (!gesturesEnabled) {
+    setMode("IDLE");
+    return;
+  }
+
+  const pinch = detectPinch(landmarks);
+  const thumbDir = detectThumbDirection(landmarks);
+  const otherCurled = areOtherFingersCurled(landmarks);
+
+  if (pinch) {
+    const thumb = landmarks[4];
+    const index = landmarks[8];
+    const currentDist = distance(thumb, index);
+    if (!pinchActive) {
+      pinchActive = true;
+      pinchStartDist = currentDist;
+      pinchStartZoom = localZoom || 1.0;
+    }
+    const targetZoom = clamp((pinchStartZoom * (pinchStartDist / currentDist)) || 1.0, 0.1, 6.0);
+    localZoom = targetZoom;
+    enqueueCommand({ type: "ZOOM", zoom: targetZoom });
+    setMode("ZOOM");
+    return;
+  }
+
+  pinchActive = false;
+
+  if (thumbDir === "up" && otherCurled) {
+    enqueueSticker({ type: "STICKER", kind: "up" });
+    setMode("THUMBS_UP");
+    return;
+  }
+
+  if (thumbDir === "down" && otherCurled) {
+    enqueueSticker({ type: "STICKER", kind: "down" });
+    setMode("THUMBS_DOWN");
+    return;
+  }
+
+  if (isOpenPalm(landmarks)) {
+    const now = Date.now();
+    if (now - lastPanAt >= 50) {
+      const palmCenter = computePalmCenter(landmarks);
+      smoothedPalm = ema(smoothedPalm, palmCenter, 0.35);
+      const prev = smoothedPalm;
+      const next = ema(prev, palmCenter, 0.35);
+      if (prev && next) {
+        const dx = (next.x - prev.x) * width * panSensitivity;
+        const dy = (next.y - prev.y) * height * panSensitivity;
+        if (Math.abs(dx) > 0.2 || Math.abs(dy) > 0.2) {
+          enqueueCommand({ type: "PAN", dx, dy });
+          lastPanAt = now;
+        }
+      }
+      smoothedPalm = next;
+    }
+    setMode("PAN");
+    return;
+  }
+
+  setMode("IDLE");
+}
+
+async function startCamera() {
+  try {
+    const mediaDevices = navigator.mediaDevices;
+    if (!mediaDevices || !mediaDevices.getUserMedia) {
+      if (cameraError) {
         cameraError.hidden = false;
         cameraError.textContent = "Camera API not available in this environment.";
-        return;
       }
+      return;
+    }
 
-      const stream = await mediaDevices.getUserMedia({ video: true });
-      video.srcObject = stream;
-      await video.play();
-      video.addEventListener("loadedmetadata", () => {
-        canvas.width = video.videoWidth || 640;
-        canvas.height = video.videoHeight || 480;
-      });
-      requestAnimationFrame(drawFrame);
-    } catch (error) {
+    const stream = await mediaDevices.getUserMedia({ video: true });
+    video.srcObject = stream;
+    await video.play();
+
+    if (cameraDiag) {
+      const secure = window.isSecureContext ? "secure" : "not secure";
+      const hasMediaDevices = !!navigator.mediaDevices;
+      cameraDiag.textContent = `Context: ${secure}. mediaDevices: ${hasMediaDevices ? "yes" : "no"}.`;
+    }
+
+    await initHandLandmarker();
+
+    requestAnimationFrame(drawFrame);
+  } catch (error) {
+    if (cameraError) {
       cameraError.hidden = false;
       if (error && error.name === "NotAllowedError") {
         cameraError.textContent = "Camera permission denied. Allow access to enable preview.";
@@ -212,17 +415,37 @@ if (video && canvas && cameraError) {
       } else {
         cameraError.textContent = "Camera unavailable. Check permissions or use a supported device.";
       }
-      console.warn("Camera error:", error);
     }
-  };
+    console.warn("Camera error:", error);
+  }
+}
 
-  if (cameraDiag) {
-    const secure = window.isSecureContext ? "secure" : "not secure";
-    const hasMediaDevices = !!navigator.mediaDevices;
-    cameraDiag.textContent = `Context: ${secure}. mediaDevices: ${hasMediaDevices ? "yes" : "no"}.`;
+function drawFrame() {
+  if (!video || !canvas) return;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  const width = (canvas.width = video.videoWidth || canvas.width || 640);
+  const height = (canvas.height = video.videoHeight || canvas.height || 480);
+
+  ctx.drawImage(video, 0, 0, width, height);
+
+  if (handLandmarker && video.currentTime !== lastVideoTime) {
+    lastVideoTime = video.currentTime;
+    const results = handLandmarker.detectForVideo(video, performance.now());
+    if (results.landmarks && results.landmarks.length > 0) {
+      const landmarks = results.landmarks[0];
+      drawLandmarks(ctx, landmarks, width, height);
+      handleGestures(landmarks, width, height);
+    } else {
+      setMode("IDLE");
+    }
   }
 
+  requestAnimationFrame(drawFrame);
+}
+
+if (video && canvas && cameraError) {
   cameraStart && cameraStart.addEventListener("click", () => startCamera());
-  // Try auto-start, but browsers may require a user gesture.
   startCamera();
 }

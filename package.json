@@ -7,7 +7,7 @@
     "build": "mkdir -p dist && npm run build:main && npm run build:ui && npm run build:html",
     "build:main": "esbuild src/main.ts --bundle --outfile=dist/main.js --platform=browser --target=es2018",
     "build:ui": "esbuild src/ui/ui.ts --bundle --outfile=dist/ui.js --platform=browser --target=es2018 --format=iife",
-    "build:html": "cp src/ui/index.html dist/ui.html",
+    "build:html": "node scripts/build-ui-html.js",
     "watch": "concurrently \"npm:watch:main\" \"npm:watch:ui\" \"npm:watch:html\"",
     "watch:main": "esbuild src/main.ts --bundle --outfile=dist/main.js --platform=browser --target=es2018 --watch",
     "watch:ui": "esbuild src/ui/ui.ts --bundle --outfile=dist/ui.js --platform=browser --target=es2018 --watch",
