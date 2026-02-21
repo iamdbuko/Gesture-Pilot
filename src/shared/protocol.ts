@@ -44,6 +44,11 @@ export type RelayLastCommandMessage = {
   command: string;
 };
 
+export type RelayErrorMessage = {
+  type: "RELAY_ERROR";
+  message: string;
+};
+
 export type UiToMainMessage =
   | PanMessage
   | ZoomMessage
@@ -51,4 +56,8 @@ export type UiToMainMessage =
   | PingMessage
   | RelayConnectMessage
   | RelayDisconnectMessage;
-export type MainToUiMessage = PongMessage | RelayStatusMessage | RelayLastCommandMessage;
+export type MainToUiMessage =
+  | PongMessage
+  | RelayStatusMessage
+  | RelayLastCommandMessage
+  | RelayErrorMessage;

@@ -12,6 +12,7 @@ const disconnectBtn = document.getElementById("relay-disconnect");
 const statusDot = document.getElementById("relay-dot");
 const statusText = document.getElementById("relay-status");
 const lastCommand = document.getElementById("relay-last");
+const lastError = document.getElementById("relay-error");
 
 connectBtn?.addEventListener("click", () => {
   const baseUrl = relayUrlInput?.value.trim() || "";
@@ -36,5 +37,9 @@ window.onmessage = (event) => {
 
   if (payload.type === "RELAY_LAST") {
     if (lastCommand) lastCommand.textContent = `Last command: ${payload.command}`;
+  }
+
+  if (payload.type === "RELAY_ERROR") {
+    if (lastError) lastError.textContent = `Last error: ${payload.message}`;
   }
 };

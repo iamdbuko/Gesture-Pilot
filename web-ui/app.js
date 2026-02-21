@@ -5,12 +5,24 @@ const RELAY_BASE_URL = "https://gesture-pilot-relay.vercel.app";
 // Relay status.
 const connDot = document.getElementById("conn-dot");
 const connText = document.getElementById("conn-text");
+const relayError = document.getElementById("relay-error");
 let connected = false;
 
 function setConnected(value) {
   connected = value;
   if (connDot) connDot.classList.toggle("ok", value);
   if (connText) connText.textContent = value ? "Relay connected" : "Relay error";
+}
+
+function setRelayError(message) {
+  if (!relayError) return;
+  if (!message) {
+    relayError.hidden = true;
+    relayError.textContent = "";
+    return;
+  }
+  relayError.hidden = false;
+  relayError.textContent = message;
 }
 
 setConnected(false);
@@ -27,16 +39,21 @@ let secret = "";
 async function createSession() {
   try {
     const res = await fetch(`${RELAY_BASE_URL}/api/create-session`, { method: "POST" });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "create-session failed");
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      console.warn("create-session failed", res.status, data);
+      throw new Error(data.error || `create-session failed (${res.status})`);
+    }
     sessionId = data.sessionId;
     secret = data.secret;
     if (pairingCode) pairingCode.textContent = sessionId;
     if (pairingSecret) pairingSecret.textContent = secret;
     setConnected(true);
+    setRelayError("");
   } catch (error) {
     setConnected(false);
     if (connText) connText.textContent = "Relay error";
+    setRelayError("Relay create-session failed. Check relay URL and CORS.");
     console.warn("Relay create-session error:", error);
   }
 }
@@ -127,11 +144,16 @@ async function flushQueue() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sessionId, secret, commands: batch }),
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "push failed");
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      console.warn("push failed", res.status, data);
+      throw new Error(data.error || `push failed (${res.status})`);
+    }
     setConnected(true);
+    setRelayError("");
   } catch (error) {
     setConnected(false);
+    setRelayError("Relay push failed. Check relay status.");
     console.warn("Relay push error:", error);
   } finally {
     flushing = false;

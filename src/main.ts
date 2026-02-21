@@ -107,12 +107,17 @@ function setLastCommand(command: string) {
   postUi({ type: "RELAY_LAST", command });
 }
 
+function setRelayError(message: string) {
+  postUi({ type: "RELAY_ERROR", message });
+}
+
 function relayDisconnect() {
   if (relayState?.intervalId != null) {
     clearInterval(relayState.intervalId);
   }
   relayState = null;
   setRelayStatus(false, "Disconnected");
+  setRelayError("—");
 }
 
 async function relayConnect(baseUrl: string, sessionId: string, secret: string) {
@@ -120,6 +125,7 @@ async function relayConnect(baseUrl: string, sessionId: string, secret: string) 
 
   if (!baseUrl || !sessionId || !secret) {
     setRelayStatus(false, "Missing relay fields");
+    setRelayError("Missing relay fields");
     return;
   }
 
@@ -131,6 +137,7 @@ async function relayConnect(baseUrl: string, sessionId: string, secret: string) 
   };
 
   setRelayStatus(true, "Connected");
+  setRelayError("—");
 
   const poll = async () => {
     if (!relayState) return;
@@ -149,6 +156,7 @@ async function relayConnect(baseUrl: string, sessionId: string, secret: string) 
       }
     } catch (error) {
       setRelayStatus(false, "Relay error");
+      setRelayError(String(error instanceof Error ? error.message : error));
     }
   };
 
