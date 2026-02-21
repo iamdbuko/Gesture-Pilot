@@ -169,13 +169,6 @@
         <span id="pan-sensitivity-value" class="subtle">2.0</span>
       </div>
       <div class="row" style="margin-top: 8px; align-items: center;">
-        <label for="trackpad-mode" class="subtle">Trackpad mode</label>
-        <select id="trackpad-mode">
-          <option value="v1" selected>v1 (relative + clutch)</option>
-          <option value="v2">v2 (active area)</option>
-        </select>
-      </div>
-      <div class="row" style="margin-top: 8px; align-items: center;">
         <label for="clutch-delay" class="subtle">Clutch delay (ms)</label>
         <input id="clutch-delay" type="range" min="50" max="800" step="25" value="200" />
         <span id="clutch-delay-value" class="subtle">200</span>
@@ -205,11 +198,6 @@
         <input id="y-boost" type="range" min="0.8" max="2.5" step="0.1" value="1.4" />
         <span id="y-boost-value" class="subtle">1.4</span>
       </div>
-      <div class="row" style="margin-top: 8px; align-items: center;">
-        <label for="active-radius" class="subtle">Active radius (px)</label>
-        <input id="active-radius" type="range" min="20" max="300" step="10" value="120" />
-        <span id="active-radius-value" class="subtle">120</span>
-      </div>
       <p class="subtle" id="gesture-mode">Mode: IDLE</p>
       <p class="subtle" id="gesture-hands">Hands: 0</p>
       <p class="subtle" id="gesture-handedness">Handedness: —</p>
@@ -225,7 +213,7 @@
         <canvas id="camera-canvas"></canvas>
         <div class="badge-overlay" id="gesture-badges">
           <span class="badge" id="badge-openpalm">Open Palm</span>
-          <span class="badge" id="badge-indexonly">Index Only</span>
+          <span class="badge" id="badge-indexonly">OK Gesture</span>
           <span class="badge" id="badge-zoom2h">Zoom 2H</span>
         </div>
       </div>

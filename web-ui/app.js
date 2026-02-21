@@ -79,7 +79,6 @@ const badgeIndexOnly = document.getElementById("badge-indexonly");
 const badgeZoom2H = document.getElementById("badge-zoom2h");
 const panSlider = document.getElementById("pan-sensitivity");
 const panValue = document.getElementById("pan-sensitivity-value");
-const trackpadModeSelect = document.getElementById("trackpad-mode");
 const clutchDelayInput = document.getElementById("clutch-delay");
 const clutchDelayValue = document.getElementById("clutch-delay-value");
 const deadzoneInput = document.getElementById("deadzone");
@@ -92,12 +91,9 @@ const maxGainInput = document.getElementById("max-gain");
 const maxGainValue = document.getElementById("max-gain-value");
 const yBoostInput = document.getElementById("y-boost");
 const yBoostValue = document.getElementById("y-boost-value");
-const activeRadiusInput = document.getElementById("active-radius");
-const activeRadiusValue = document.getElementById("active-radius-value");
 
 let gesturesEnabled = false;
 let panSensitivity = 1.2;
-let trackpadMode = "v1";
 let clutchDelayMs = 250;
 let deadzone = 1.5;
 let emaAlpha = 0.22;
@@ -152,12 +148,6 @@ if (panSlider && panValue) {
   });
 }
 
-if (trackpadModeSelect) {
-  trackpadModeSelect.addEventListener("change", () => {
-    trackpadMode = trackpadModeSelect.value === "v2" ? "v2" : "v1";
-  });
-}
-
 if (clutchDelayInput && clutchDelayValue) {
   clutchDelayInput.addEventListener("input", () => {
     clutchDelayMs = Number(clutchDelayInput.value) || 250;
@@ -200,12 +190,6 @@ if (yBoostInput && yBoostValue) {
   });
 }
 
-if (activeRadiusInput && activeRadiusValue) {
-  activeRadiusInput.addEventListener("input", () => {
-    activeRadiusPx = Number(activeRadiusInput.value) || 90;
-    activeRadiusValue.textContent = String(Math.round(activeRadiusPx));
-  });
-}
 
 updateGestureStatus();
 setMode("IDLE");
@@ -337,6 +321,9 @@ let lastThumbsAt = { up: 0, down: 0 };
 let panEngaged = false;
 let lastIndexSeenAt = 0;
 let activeOrigin = null;
+let inertialVx = 0;
+let inertialVy = 0;
+let inertialActive = false;
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
@@ -411,6 +398,17 @@ function isArmGesture(landmarks) {
   const ringCurled = !isFingerExtended(landmarks, 16, 14);
   const pinkyCurled = !isFingerExtended(landmarks, 20, 18);
   return indexExt && middleExt && ringCurled && pinkyCurled;
+}
+
+function isOkGesture(landmarks) {
+  const thumbTip = landmarks[4];
+  const indexTip = landmarks[8];
+  const handScale = distance(landmarks[0], landmarks[9]) || 1;
+  const pinch = distance(thumbTip, indexTip) / handScale;
+  const middleCurled = !isFingerExtended(landmarks, 12, 10);
+  const ringCurled = !isFingerExtended(landmarks, 16, 14);
+  const pinkyCurled = !isFingerExtended(landmarks, 20, 18);
+  return pinch < 0.08 && middleCurled && ringCurled && pinkyCurled;
 }
 
 function pinchDistanceNormalized(landmarks) {
@@ -580,21 +578,17 @@ function handleGestures(landmarksList, handednessList, width, height) {
     return;
   }
 
-  // PAN (right hand, index only).
+  // PAN (right hand, OK gesture).
   if (rightHand) {
-    const indexOnly =
-      isFingerExtended(rightHand, 8, 6) &&
-      !isFingerExtended(rightHand, 12, 10) &&
-      !isFingerExtended(rightHand, 16, 14) &&
-      !isFingerExtended(rightHand, 20, 18);
-    setBadgeActive(badgeIndexOnly, indexOnly);
-    if (indexOnly) {
+    const okGesture = isOkGesture(rightHand);
+    setBadgeActive(badgeIndexOnly, okGesture);
+    if (okGesture) {
       lastIndexSeenAt = now;
       if (!panEnterAt) panEnterAt = now;
     } else {
       panEnterAt = 0;
     }
-    if (!indexOnly) {
+    if (!okGesture) {
       if (!panExitAt) panExitAt = now;
     } else {
       panExitAt = 0;
@@ -606,12 +600,13 @@ function handleGestures(landmarksList, handednessList, width, height) {
         modeSince = now;
         panEngaged = true;
         smoothedIndex = null;
-        activeOrigin = null;
+        inertialActive = false;
       }
-      if (!indexOnly && panExitAt && now - panExitAt >= 100) {
+      if (!okGesture && panExitAt && now - panExitAt >= clutchDelayMs) {
         mode = "IDLE";
         setMode("IDLE");
         panEngaged = false;
+        inertialActive = true;
         return;
       }
 
@@ -619,24 +614,10 @@ function handleGestures(landmarksList, handednessList, width, height) {
       const prev = smoothedIndex;
       const next = ema(smoothedIndex, { x: tip.x, y: tip.y }, emaAlpha);
       smoothedIndex = next;
-      if (trackpadMode === "v2") {
-        if (!activeOrigin && next) {
-          activeOrigin = { x: next.x, y: next.y };
-        }
-      }
 
       if (prev && next && now - lastPanAt >= 50) {
         let dx = (next.x - prev.x) * width;
         let dy = (next.y - prev.y) * height * yBoost;
-
-        if (trackpadMode === "v2" && activeOrigin) {
-          const ox = (next.x - activeOrigin.x) * width;
-          const oy = (next.y - activeOrigin.y) * height * yBoost;
-          const dist = Math.hypot(ox, oy);
-          if (dist > activeRadiusPx) {
-            return;
-          }
-        }
 
         const speed = Math.hypot(dx, dy);
         const gain = clamp(0.6 + speed * speedGain, 0.6, maxGain);
@@ -646,6 +627,8 @@ function handleGestures(landmarksList, handednessList, width, height) {
           dx = clamp(dx, -30, 30);
           dy = clamp(dy, -30, 30);
           emitCommand({ type: "PAN", dx, dy }, `PAN ${dx.toFixed(1)}, ${dy.toFixed(1)}`);
+          inertialVx = dx;
+          inertialVy = dy;
           lastPanAt = now;
         }
       }
@@ -660,6 +643,18 @@ function handleGestures(landmarksList, handednessList, width, height) {
   setZoomDebug("—", "—");
   setBadgeActive(badgeIndexOnly, false);
   setBadgeActive(badgeZoom2H, false);
+  if (inertialActive && !panEngaged) {
+    // Apply inertia when pan stops.
+    inertialVx *= 0.86;
+    inertialVy *= 0.86;
+    if (Math.abs(inertialVx) + Math.abs(inertialVy) > 0.8) {
+      emitCommand({ type: "PAN", dx: inertialVx, dy: inertialVy }, `PAN ${inertialVx.toFixed(1)}, ${inertialVy.toFixed(1)}`);
+    } else {
+      inertialActive = false;
+      inertialVx = 0;
+      inertialVy = 0;
+    }
+  }
   setMode("IDLE");
 }
 
