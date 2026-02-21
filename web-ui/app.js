@@ -554,14 +554,12 @@ function handleGestures(landmarksList, handednessList, width, height) {
     rightHand = landmarksList[0];
   }
 
-  // ZOOM_2H has highest priority.
+  // ZOOM (right hand open palm).
   let openA = false;
-  let openB = false;
-  if (handsCount >= 2) {
-    openA = openPalmScore(landmarksList[0]) >= 0.75;
-    openB = openPalmScore(landmarksList[1]) >= 0.75;
-    setBadgeActive(badgeOpenPalm, openA && openB);
-    if (openA && openB) {
+  if (rightHand) {
+    openA = openPalmScore(rightHand) >= 0.75;
+    setBadgeActive(badgeOpenPalm, openA);
+    if (openA) {
       if (!zoomEnterAt) zoomEnterAt = now;
     } else {
       zoomEnterAt = 0;
@@ -570,43 +568,32 @@ function handleGestures(landmarksList, handednessList, width, height) {
     zoomEnterAt = 0;
   }
 
-  if (handsCount < 2 || !openA || !openB) {
+  if (!rightHand || !openA) {
     if (!zoomExitAt) zoomExitAt = now;
   } else {
     zoomExitAt = 0;
   }
 
-  if ((mode !== "ZOOM" && handsCount >= 2 && zoomEnterAt && now - zoomEnterAt >= 200) || mode === "ZOOM") {
+  if ((mode !== "ZOOM" && rightHand && zoomEnterAt && now - zoomEnterAt >= 200) || mode === "ZOOM") {
     if (mode !== "ZOOM") {
       mode = "ZOOM";
       modeSince = now;
-      zoomS0 = ((maxMinArea(landmarksList[0]) + maxMinArea(landmarksList[1])) / 2) || 1;
+      zoomS0 = maxMinArea(rightHand) || 1;
       zoom0 = localZoom || 1.0;
       zoomRatioEma = 1.0;
       setMode("ZOOM");
     }
     setBadgeActive(badgeZoom2H, true);
 
-    if (handsCount < 2 || !openA || !openB) {
-      if (now - modeSince >= 400 && zoomExitAt && now - zoomExitAt >= 150) {
-        mode = "IDLE";
-        setMode("IDLE");
-        setBadgeActive(badgeZoom2H, false);
-        return;
-      }
-      setZoomDebug("—", zoomS0 ? zoomS0.toFixed(3) : "—");
-      return;
-    }
-
-    if (handsCount < 2 && now - modeSince >= 400 && zoomExitAt && now - zoomExitAt >= 150) {
+    if ((!rightHand || !openA) && now - modeSince >= 400 && zoomExitAt && now - zoomExitAt >= 150) {
       mode = "IDLE";
       setMode("IDLE");
       setBadgeActive(badgeZoom2H, false);
       return;
     }
 
-    if (handsCount >= 2) {
-      const s = ((maxMinArea(landmarksList[0]) + maxMinArea(landmarksList[1])) / 2) || 1;
+    if (rightHand) {
+      const s = maxMinArea(rightHand) || 1;
       const ratioRaw = clamp(zoomS0 / s, 0.1, 10);
       zoomRatioEma = 0.7 * zoomRatioEma + 0.3 * ratioRaw;
       if (Math.abs(zoomRatioEma - 1) > 0.02) {
@@ -677,11 +664,7 @@ function handleGestures(landmarksList, handednessList, width, height) {
         let dy = (next.y - prev.y) * height * yBoost;
 
         const speed = Math.hypot(dx, dy);
-        const gain = clamp(
-          0.8 + speed * speedGain * 40 + (Math.exp(Math.min(speed, 3)) - 1) * (fastBoost / 200),
-          0.5,
-          maxGain
-        );
+        const gain = clamp(0.8 + speed * speedGain * 40 + speed * speed * (fastBoost / 1000), 0.5, maxGain);
         dx = dx * panSensitivity * gain;
         dy = -dy * panSensitivity * gain;
         if (Math.abs(dx) + Math.abs(dy) >= deadzone) {
