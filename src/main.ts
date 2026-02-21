@@ -116,7 +116,7 @@ function setRelayError(message: string) {
 
 function relayDisconnect() {
   if (relayState?.intervalId != null) {
-    clearInterval(relayState.intervalId);
+    clearTimeout(relayState.intervalId);
   }
   if (relayState) {
     relayState.active = false;
@@ -150,7 +150,10 @@ async function relayConnect(baseUrl: string, sessionId: string, secret: string) 
 
   const poll = async (token: number) => {
     if (!relayState || !relayState.active || relayState.pollToken !== token) return;
-    if (relayState.inFlight) return;
+    if (relayState.inFlight) {
+      relayState.intervalId = setTimeout(() => poll(token), 200) as unknown as number;
+      return;
+    }
     relayState.inFlight = true;
     try {
       const url =
@@ -166,17 +169,22 @@ async function relayConnect(baseUrl: string, sessionId: string, secret: string) 
         await handleRelayCommand(cmd);
       }
     } catch (error) {
-      setRelayStatus(false, "Relay error");
-      setRelayError(String(error instanceof Error ? error.message : error));
+      const msg = String(error instanceof Error ? error.message : error);
+      // Ignore internal callback id errors but keep connection alive.
+      if (!msg.includes("callback with invalid id")) {
+        setRelayStatus(false, "Relay error");
+        setRelayError(msg);
+      }
     } finally {
       if (relayState) {
         relayState.inFlight = false;
+        relayState.intervalId = setTimeout(() => poll(token), 200) as unknown as number;
       }
     }
   };
 
   const token = relayState.pollToken;
-  relayState.intervalId = setInterval(() => poll(token), 200) as unknown as number;
+  relayState.intervalId = setTimeout(() => poll(token), 200) as unknown as number;
   poll(token);
 }
 

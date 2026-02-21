@@ -531,12 +531,16 @@ function handleGestures(landmarksList, handednessList, width, height) {
 
       const tip = rightHand[8];
       const prev = smoothedIndex;
-      const next = ema(smoothedIndex, { x: tip.x, y: tip.y }, 0.35);
+      const next = ema(smoothedIndex, { x: tip.x, y: tip.y }, 0.22);
       smoothedIndex = next;
       if (prev && next && now - lastPanAt >= 50) {
-        let dx = (next.x - prev.x) * width * panSensitivity;
-        let dy = (next.y - prev.y) * height * panSensitivity;
-        if (Math.abs(dx) + Math.abs(dy) >= 3) {
+        let dx = (next.x - prev.x) * width;
+        let dy = (next.y - prev.y) * height;
+        const speed = Math.hypot(dx, dy);
+        const gain = clamp(0.6 + speed * 0.03, 0.6, 3.0);
+        dx = dx * panSensitivity * gain;
+        dy = dy * panSensitivity * gain;
+        if (Math.abs(dx) + Math.abs(dy) >= 1.5) {
           dx = clamp(dx, -30, 30);
           dy = clamp(dy, -30, 30);
           emitCommand({ type: "PAN", dx, dy }, `PAN ${dx.toFixed(1)}, ${dy.toFixed(1)}`);
