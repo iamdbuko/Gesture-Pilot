@@ -7,6 +7,7 @@ const PAN_STEP = 120;
 const connDot = document.getElementById("conn-dot");
 const connText = document.getElementById("conn-text");
 const relayError = document.getElementById("relay-error");
+const relayLastPush = document.getElementById("relay-last-push");
 let connected = false;
 
 function setConnected(value) {
@@ -206,6 +207,7 @@ let flushing = false;
 function enqueueCommand(command) {
   if (!sessionId || !secret) return;
   queue.push(command);
+  flushQueue();
 }
 
 function enqueueSticker(command) {
@@ -241,10 +243,12 @@ async function flushQueue() {
       throw new Error(data.error || `push failed (${res.status})`);
     }
     setConnected(true);
+    if (relayLastPush) relayLastPush.textContent = `Last push: ok (${batch.length})`;
     setRelayError("");
   } catch (error) {
     setConnected(false);
     setRelayError("Relay push failed. Check relay status.");
+    if (relayLastPush) relayLastPush.textContent = "Last push: error";
     console.warn("Relay push error:", error);
   } finally {
     flushing = false;
