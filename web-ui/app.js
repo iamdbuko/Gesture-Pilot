@@ -460,14 +460,23 @@ function handleGestures(landmarksList, handednessList, width, height) {
     if (mode !== "ZOOM") {
       mode = "ZOOM";
       modeSince = now;
-      const c1 = computePalmCenter(landmarksList[0]);
-      const c2 = computePalmCenter(landmarksList[1]);
       zoomS0 = ((maxMinArea(landmarksList[0]) + maxMinArea(landmarksList[1])) / 2) || 1;
       zoom0 = localZoom || 1.0;
       zoomRatioEma = 1.0;
       setMode("ZOOM");
     }
     setBadgeActive(badgeZoom2H, true);
+
+    if (handsCount < 2 || !openA || !openB) {
+      if (now - modeSince >= 400 && zoomExitAt && now - zoomExitAt >= 150) {
+        mode = "IDLE";
+        setMode("IDLE");
+        setBadgeActive(badgeZoom2H, false);
+        return;
+      }
+      setZoomDebug("—", zoomS0 ? zoomS0.toFixed(3) : "—");
+      return;
+    }
 
     if (handsCount < 2 && now - modeSince >= 400 && zoomExitAt && now - zoomExitAt >= 150) {
       mode = "IDLE";
