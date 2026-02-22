@@ -677,11 +677,9 @@ async function initHandLandmarker() {
 }
 
 function drawLandmarks(ctx, landmarks, width, height) {
-  ctx.strokeStyle = "rgba(0, 200, 255, 0.95)";
-  ctx.fillStyle = "rgba(0, 200, 255, 0.95)";
-  ctx.lineWidth = 3;
-  ctx.shadowColor = "rgba(0, 200, 255, 0.6)";
-  ctx.shadowBlur = 6;
+  ctx.strokeStyle = "rgba(48,185,90,0.8)";
+  ctx.fillStyle = "rgba(48,185,90,0.9)";
+  ctx.lineWidth = 2;
 
   const connections = [
     [0, 1], [1, 2], [2, 3], [3, 4],
@@ -703,7 +701,7 @@ function drawLandmarks(ctx, landmarks, width, height) {
 
   landmarks.forEach((p) => {
     ctx.beginPath();
-    ctx.arc(p.x * width, p.y * height, 6, 0, Math.PI * 2);
+    ctx.arc(p.x * width, p.y * height, 4, 0, Math.PI * 2);
     ctx.fill();
   });
 }
