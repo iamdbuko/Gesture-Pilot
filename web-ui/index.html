@@ -26,28 +26,6 @@
         box-shadow: 0 6px 18px rgba(22, 22, 28, 0.08);
         margin-bottom: 12px;
       }
-      .topbar {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 12px;
-      }
-      .icon-button {
-        width: 32px;
-        height: 32px;
-        border-radius: 10px;
-        border: none;
-        background: #e5e7ef;
-        color: #1c1c1f;
-        cursor: pointer;
-        font-size: 16px;
-      }
-      .settings {
-        display: none;
-      }
-      .settings.open {
-        display: block;
-      }
       .row {
         display: flex;
         gap: 8px;
@@ -159,21 +137,98 @@
         display: flex;
         gap: 6px;
         flex-wrap: wrap;
-        z-index: 9999;
-        pointer-events: none;
-        opacity: 1;
+        z-index: 4;
       }
     </style>
   </head>
   <body>
-    <div class="topbar">
-      <h1>Gesture Pilot</h1>
-      <button id="settings-toggle" class="icon-button" aria-label="Settings">⚙️</button>
+    <h1>Gesture Pilot</h1>
+
+    <div class="panel">
+      <div class="status">
+        <span class="dot" id="conn-dot"></span>
+        <span id="conn-text">Connecting…</span>
+      </div>
+      <p class="subtle" id="ws-status">WS: connecting…</p>
+      <p class="subtle" id="relay-error" hidden></p>
+      <p class="subtle" id="relay-last-push">Last push: —</p>
+    </div>
+
+    <div class="panel">
+      <label>Pairing</label>
+      <div class="row" style="margin-top: 8px; align-items: center;">
+        <div class="subtle">Pairing Code:</div>
+        <div id="pairing-code" class="subtle">—</div>
+        <button id="copy-code" class="secondary">Copy</button>
+      </div>
+      <div class="row" style="margin-top: 8px; align-items: center;">
+        <div class="subtle">Secret:</div>
+        <div id="pairing-secret" class="subtle">—</div>
+        <button id="copy-secret" class="secondary">Copy</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="toggle">
+        <input id="enable-gestures" type="checkbox" />
+        <label for="enable-gestures">Enable gestures</label>
+      </div>
+      <div class="row" style="margin-top: 8px; align-items: center;">
+        <button id="enable-voice" class="secondary">Enable Voice</button>
+        <span class="subtle" id="voice-status">Voice: OFF</span>
+      </div>
+      <p class="subtle" id="voice-hint">Show LEFT open palm to trigger: “add text …”</p>
+      <p class="subtle" id="voice-transcript">Transcript: —</p>
+      <div class="row" style="margin-top: 8px; align-items: center;">
+        <label for="pan-sensitivity" class="subtle">Pan sensitivity</label>
+        <input id="pan-sensitivity" type="range" min="0.2" max="8" step="0.2" value="1.2" />
+        <span id="pan-sensitivity-value" class="subtle">1.2</span>
+      </div>
+      <div class="row" style="margin-top: 8px; align-items: center;">
+        <label for="clutch-delay" class="subtle">Clutch delay (ms)</label>
+        <input id="clutch-delay" type="range" min="50" max="800" step="25" value="200" />
+        <span id="clutch-delay-value" class="subtle">200</span>
+      </div>
+      <div class="row" style="margin-top: 8px; align-items: center;">
+        <label for="deadzone" class="subtle">Deadzone (px)</label>
+        <input id="deadzone" type="range" min="0" max="12" step="0.5" value="0.8" />
+        <span id="deadzone-value" class="subtle">0.8</span>
+      </div>
+      <div class="row" style="margin-top: 8px; align-items: center;">
+        <label for="ema-alpha" class="subtle">EMA alpha</label>
+        <input id="ema-alpha" type="range" min="0.05" max="0.9" step="0.05" value="0.40" />
+        <span id="ema-alpha-value" class="subtle">0.40</span>
+      </div>
+      <div class="row" style="margin-top: 8px; align-items: center;">
+        <label for="speed-gain" class="subtle">Speed gain</label>
+        <input id="speed-gain" type="range" min="0.0" max="0.2" step="0.01" value="0.03" />
+        <span id="speed-gain-value" class="subtle">0.030</span>
+      </div>
+      <div class="row" style="margin-top: 8px; align-items: center;">
+        <label for="fast-boost" class="subtle">Fast boost</label>
+        <input id="fast-boost" type="range" min="0" max="2000" step="50" value="600" />
+        <span id="fast-boost-value" class="subtle">600</span>
+      </div>
+      <div class="row" style="margin-top: 8px; align-items: center;">
+        <label for="max-gain" class="subtle">Max gain</label>
+        <input id="max-gain" type="range" min="1.0" max="200.0" step="5.0" value="80.0" />
+        <span id="max-gain-value" class="subtle">80.00</span>
+      </div>
+      <div class="row" style="margin-top: 8px; align-items: center;">
+        <label for="y-boost" class="subtle">Vertical boost</label>
+        <input id="y-boost" type="range" min="0.8" max="2.5" step="0.1" value="1.2" />
+        <span id="y-boost-value" class="subtle">1.2</span>
+      </div>
+      <p class="subtle" id="gesture-mode">Mode: IDLE</p>
+      <p class="subtle" id="gesture-hands">Hands: 0</p>
+      <p class="subtle" id="gesture-handedness">Handedness: —</p>
+      <p class="subtle" id="gesture-zoom">Zoom: S — / S0 —</p>
+      <p class="subtle" id="gesture-last">Last cmd: —</p>
+      <p class="subtle" id="gesture-status">Gestures disabled</p>
     </div>
 
     <div class="panel">
       <label>Camera preview</label>
-      <p class="subtle" id="badge-debug" style="margin-top: 6px;">Badges: —</p>
       <div class="camera">
         <video id="camera-video" autoplay playsinline muted></video>
         <canvas id="camera-canvas"></canvas>
@@ -183,125 +238,36 @@
           <span class="badge" id="badge-zoom2h">Zoom Palm</span>
         </div>
       </div>
+      <div class="row" style="margin-top: 8px; align-items: center;">
+        <button id="camera-start" class="secondary">Start camera</button>
+      </div>
+      <p class="subtle" id="camera-error" hidden></p>
+      <p class="subtle" id="camera-diagnostic"></p>
     </div>
 
-    <div class="settings" id="settings-panel">
-      <div class="panel">
-        <div class="status">
-          <span class="dot" id="conn-dot"></span>
-          <span id="conn-text">Connecting…</span>
-        </div>
-        <p class="subtle" id="ws-status">WS: connecting…</p>
-        <p class="subtle" id="relay-error" hidden></p>
-        <p class="subtle" id="relay-last-push">Last push: —</p>
+    <div class="panel">
+      <label>Pan</label>
+      <div class="row" style="margin-top: 8px;">
+        <button data-pan="up">Up</button>
+        <button data-pan="down">Down</button>
+        <button data-pan="left">Left</button>
+        <button data-pan="right">Right</button>
       </div>
+    </div>
 
-      <div class="panel">
-        <label>Pairing</label>
-        <div class="row" style="margin-top: 8px; align-items: center;">
-          <div class="subtle">Pairing Code:</div>
-          <div id="pairing-code" class="subtle">—</div>
-          <button id="copy-code" class="secondary">Copy</button>
-        </div>
-        <div class="row" style="margin-top: 8px; align-items: center;">
-          <div class="subtle">Secret:</div>
-          <div id="pairing-secret" class="subtle">—</div>
-          <button id="copy-secret" class="secondary">Copy</button>
-        </div>
+    <div class="panel">
+      <label>Zoom</label>
+      <div class="row" style="margin-top: 8px; align-items: center;">
+        <input id="zoom-value" type="number" step="0.1" min="0.1" max="6" value="1" />
+        <button id="zoom-set">Set zoom</button>
       </div>
+    </div>
 
-      <div class="panel">
-        <div class="toggle">
-          <input id="enable-gestures" type="checkbox" />
-          <label for="enable-gestures">Enable gestures</label>
-        </div>
-        <div class="row" style="margin-top: 8px; align-items: center;">
-          <button id="enable-voice" class="secondary">Enable Voice</button>
-          <span class="subtle" id="voice-status">Voice: OFF</span>
-        </div>
-        <p class="subtle" id="voice-hint">Show LEFT open palm to trigger: “add text …”</p>
-        <p class="subtle" id="voice-transcript">Transcript: —</p>
-        <div class="row" style="margin-top: 8px; align-items: center;">
-          <label for="pan-sensitivity" class="subtle">Pan sensitivity</label>
-          <input id="pan-sensitivity" type="range" min="0.2" max="8" step="0.2" value="1.2" />
-          <span id="pan-sensitivity-value" class="subtle">1.2</span>
-        </div>
-        <div class="row" style="margin-top: 8px; align-items: center;">
-          <label for="clutch-delay" class="subtle">Clutch delay (ms)</label>
-          <input id="clutch-delay" type="range" min="50" max="800" step="25" value="200" />
-          <span id="clutch-delay-value" class="subtle">200</span>
-        </div>
-        <div class="row" style="margin-top: 8px; align-items: center;">
-          <label for="deadzone" class="subtle">Deadzone (px)</label>
-          <input id="deadzone" type="range" min="0" max="12" step="0.5" value="0.8" />
-          <span id="deadzone-value" class="subtle">0.8</span>
-        </div>
-        <div class="row" style="margin-top: 8px; align-items: center;">
-          <label for="ema-alpha" class="subtle">EMA alpha</label>
-          <input id="ema-alpha" type="range" min="0.05" max="0.9" step="0.05" value="0.40" />
-          <span id="ema-alpha-value" class="subtle">0.40</span>
-        </div>
-        <div class="row" style="margin-top: 8px; align-items: center;">
-          <label for="speed-gain" class="subtle">Speed gain</label>
-          <input id="speed-gain" type="range" min="0.0" max="0.2" step="0.01" value="0.03" />
-          <span id="speed-gain-value" class="subtle">0.030</span>
-        </div>
-        <div class="row" style="margin-top: 8px; align-items: center;">
-          <label for="fast-boost" class="subtle">Fast boost</label>
-          <input id="fast-boost" type="range" min="0" max="2000" step="50" value="600" />
-          <span id="fast-boost-value" class="subtle">600</span>
-        </div>
-        <div class="row" style="margin-top: 8px; align-items: center;">
-          <label for="max-gain" class="subtle">Max gain</label>
-          <input id="max-gain" type="range" min="1.0" max="200.0" step="5.0" value="80.0" />
-          <span id="max-gain-value" class="subtle">80.00</span>
-        </div>
-        <div class="row" style="margin-top: 8px; align-items: center;">
-          <label for="y-boost" class="subtle">Vertical boost</label>
-          <input id="y-boost" type="range" min="0.8" max="2.5" step="0.1" value="1.2" />
-          <span id="y-boost-value" class="subtle">1.2</span>
-        </div>
-        <p class="subtle" id="gesture-mode">Mode: IDLE</p>
-        <p class="subtle" id="gesture-hands">Hands: 0</p>
-        <p class="subtle" id="gesture-handedness">Handedness: —</p>
-        <p class="subtle" id="gesture-zoom">Zoom: S — / S0 —</p>
-        <p class="subtle" id="gesture-last">Last cmd: —</p>
-        <p class="subtle" id="gesture-status">Gestures disabled</p>
-      </div>
-
-      <div class="panel">
-        <label>Camera options</label>
-        <div class="row" style="margin-top: 8px; align-items: center;">
-          <button id="camera-start" class="secondary">Start camera</button>
-        </div>
-        <p class="subtle" id="camera-error" hidden></p>
-        <p class="subtle" id="camera-diagnostic"></p>
-      </div>
-
-      <div class="panel">
-        <label>Pan</label>
-        <div class="row" style="margin-top: 8px;">
-          <button data-pan="up">Up</button>
-          <button data-pan="down">Down</button>
-          <button data-pan="left">Left</button>
-          <button data-pan="right">Right</button>
-        </div>
-      </div>
-
-      <div class="panel">
-        <label>Zoom</label>
-        <div class="row" style="margin-top: 8px; align-items: center;">
-          <input id="zoom-value" type="number" step="0.1" min="0.1" max="6" value="1" />
-          <button id="zoom-set">Set zoom</button>
-        </div>
-      </div>
-
-      <div class="panel">
-        <label>Sticker</label>
-        <div class="row" style="margin-top: 8px;">
-          <button id="sticker-up" class="secondary">Thumbs up</button>
-          <button id="sticker-down" class="secondary">Thumbs down</button>
-        </div>
+    <div class="panel">
+      <label>Sticker</label>
+      <div class="row" style="margin-top: 8px;">
+        <button id="sticker-up" class="secondary">Thumbs up</button>
+        <button id="sticker-down" class="secondary">Thumbs down</button>
       </div>
     </div>
 
