@@ -931,6 +931,13 @@ async function startCamera() {
     const stream = await mediaDevices.getUserMedia({ video: true });
     video.srcObject = stream;
     await video.play();
+    if (canvas) {
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      canvas.style.display = "block";
+      canvas.style.opacity = "1";
+      canvas.style.zIndex = "2";
+    }
 
     if (cameraDiag) {
       const secure = window.isSecureContext ? "secure" : "not secure";
@@ -965,9 +972,6 @@ function drawFrame() {
   const height = (canvas.height = video.videoHeight || canvas.height || 480);
 
   ctx.drawImage(video, 0, 0, width, height);
-  // Debug overlay marker to confirm canvas is visible.
-  ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
-  ctx.fillRect(8, 8, 6, 6);
 
   if (handLandmarker && video.currentTime !== lastVideoTime) {
     lastVideoTime = video.currentTime;
