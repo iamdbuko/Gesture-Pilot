@@ -192,7 +192,7 @@ function initVoice() {
   recognition.onstart = () => {
     voiceListening = true;
     setVoiceStatus("LISTENING");
-    setVoiceHint("Listening…");
+    setVoiceHint("Listening… say: add text <your words>");
     if (voiceTimeoutId) clearTimeout(voiceTimeoutId);
     voiceTimeoutId = setTimeout(() => {
       try {
@@ -231,13 +231,13 @@ function initVoice() {
     lastVoiceAt = Date.now();
     if (voiceEnabled && voiceState !== "ERROR") {
       setVoiceStatus("READY");
-      setVoiceHint("Show LEFT open palm to trigger: “add text …”");
+      setVoiceHint("Click Enable Voice to listen again. Say: add text <your words>");
     }
   };
 
   voiceEnabled = true;
   setVoiceStatus("READY");
-  setVoiceHint("Show LEFT open palm to trigger: “add text …”");
+  setVoiceHint("Click Enable Voice to listen. Say: add text <your words>");
   if (voiceButton) voiceButton.disabled = true;
 }
 
