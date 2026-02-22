@@ -256,7 +256,6 @@ function handleFinalTranscript(transcript) {
 
 function startListeningIfReady() {
   if (!voiceEnabled || !recognition || voiceListening) return;
-  if (Date.now() - lastVoiceAt < 2000) return;
   try {
     recognition.start();
   } catch (error) {
@@ -270,7 +269,15 @@ if (voiceButton) {
     if (!voiceEnabled) {
       initVoice();
     }
-    startListeningIfReady();
+    try {
+      if (recognition && voiceListening) recognition.stop();
+      if (recognition && !voiceListening) {
+        lastVoiceAt = 0;
+        recognition.start();
+      }
+    } catch {
+      startListeningIfReady();
+    }
   });
 }
 
