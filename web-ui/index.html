@@ -109,13 +109,6 @@
         height: 100%;
         object-fit: cover;
       }
-      #camera-video {
-        z-index: 1;
-      }
-      #camera-canvas {
-        z-index: 2;
-        pointer-events: none;
-      }
       .status {
         display: inline-flex;
         align-items: center;
@@ -173,11 +166,6 @@
       <div class="camera">
         <video id="camera-video" autoplay playsinline muted></video>
         <canvas id="camera-canvas"></canvas>
-        <div class="badge-overlay" id="gesture-badges">
-          <span class="badge" id="badge-openpalm">Open Palm</span>
-          <span class="badge" id="badge-indexonly">Two Fingers</span>
-          <span class="badge" id="badge-zoom2h">Zoom Palm</span>
-        </div>
       </div>
     </div>
 
