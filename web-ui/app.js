@@ -231,13 +231,14 @@ function initVoice() {
     lastVoiceAt = Date.now();
     if (voiceEnabled && voiceState !== "ERROR") {
       setVoiceStatus("READY");
-      setVoiceHint("Click Enable Voice to listen again. Say: add text <your words>");
+      setVoiceHint("Listening is always on. Say: add text <your words>");
+      setTimeout(() => startListeningIfReady(), 150);
     }
   };
 
   voiceEnabled = true;
   setVoiceStatus("READY");
-  setVoiceHint("Click Enable Voice to listen. Say: add text <your words>");
+  setVoiceHint("Listening is always on. Say: add text <your words>");
 }
 
 function handleFinalTranscript(transcript) {
