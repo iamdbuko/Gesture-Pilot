@@ -268,8 +268,10 @@ function startListeningIfReady() {
 
 if (voiceButton) {
   voiceButton.addEventListener("click", () => {
-    if (voiceEnabled) return;
-    initVoice();
+    if (!voiceEnabled) {
+      initVoice();
+    }
+    startListeningIfReady();
   });
 }
 
