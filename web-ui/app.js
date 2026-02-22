@@ -238,7 +238,6 @@ function initVoice() {
   voiceEnabled = true;
   setVoiceStatus("READY");
   setVoiceHint("Click Enable Voice to listen. Say: add text <your words>");
-  if (voiceButton) voiceButton.disabled = true;
 }
 
 function handleFinalTranscript(transcript) {
