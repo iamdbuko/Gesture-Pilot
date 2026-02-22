@@ -10,8 +10,6 @@ const connText = document.getElementById("conn-text");
 const relayError = document.getElementById("relay-error");
 const relayLastPush = document.getElementById("relay-last-push");
 const wsStatus = document.getElementById("ws-status");
-const settingsToggle = document.getElementById("settings-toggle");
-const settingsPanel = document.getElementById("settings-panel");
 let connected = false;
 
 function setConnected(value) {
@@ -175,12 +173,6 @@ if (gestureToggle) {
   gestureToggle.addEventListener("change", () => {
     gesturesEnabled = gestureToggle.checked;
     updateGestureStatus();
-  });
-}
-
-if (settingsToggle && settingsPanel) {
-  settingsToggle.addEventListener("click", () => {
-    settingsPanel.classList.toggle("open");
   });
 }
 
