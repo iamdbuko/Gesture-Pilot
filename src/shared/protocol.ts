@@ -14,6 +14,12 @@ export type StickerMessage = {
   kind: "up" | "down";
 };
 
+export type AddTextMessage = {
+  type: "ADD_TEXT";
+  text: string;
+  source?: "voice";
+};
+
 export type PingMessage = {
   type: "PING";
 };
@@ -60,6 +66,7 @@ export type UiToMainMessage =
   | PanMessage
   | ZoomMessage
   | StickerMessage
+  | AddTextMessage
   | PingMessage
   | RelayConnectMessage
   | RelayDisconnectMessage;

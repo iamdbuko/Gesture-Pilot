@@ -83,6 +83,10 @@ const gestureLast = document.getElementById("gesture-last");
 const badgeOpenPalm = document.getElementById("badge-openpalm");
 const badgeIndexOnly = document.getElementById("badge-indexonly");
 const badgeZoom2H = document.getElementById("badge-zoom2h");
+const voiceButton = document.getElementById("enable-voice");
+const voiceStatus = document.getElementById("voice-status");
+const voiceHint = document.getElementById("voice-hint");
+const voiceTranscript = document.getElementById("voice-transcript");
 const panSlider = document.getElementById("pan-sensitivity");
 const panValue = document.getElementById("pan-sensitivity-value");
 const clutchDelayInput = document.getElementById("clutch-delay");
@@ -101,6 +105,14 @@ const yBoostInput = document.getElementById("y-boost");
 const yBoostValue = document.getElementById("y-boost-value");
 
 let gesturesEnabled = false;
+let voiceEnabled = false;
+let voiceListening = false;
+let voiceState = "OFF";
+let lastVoiceAt = 0;
+let leftOpenStart = 0;
+let leftOpenTriggered = false;
+let voiceTimeoutId = null;
+let recognition = null;
 // Soft Precision defaults (tuned baseline).
 let panSensitivity = 1.2;
 let clutchDelayMs = 200;
@@ -116,6 +128,19 @@ function updateGestureStatus() {
   if (gestureStatus) {
     gestureStatus.textContent = gesturesEnabled ? "Gestures enabled" : "Gestures disabled";
   }
+}
+
+function setVoiceStatus(text) {
+  voiceState = text;
+  if (voiceStatus) voiceStatus.textContent = `Voice: ${text}`;
+}
+
+function setVoiceHint(text) {
+  if (voiceHint) voiceHint.textContent = text;
+}
+
+function setVoiceTranscript(text) {
+  if (voiceTranscript) voiceTranscript.textContent = `Transcript: ${text}`;
 }
 
 function setMode(label) {
@@ -148,6 +173,103 @@ if (gestureToggle) {
   gestureToggle.addEventListener("change", () => {
     gesturesEnabled = gestureToggle.checked;
     updateGestureStatus();
+  });
+}
+
+function initVoice() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    setVoiceStatus("ERROR");
+    setVoiceHint("SpeechRecognition not supported in this browser.");
+    return;
+  }
+  recognition = new SpeechRecognition();
+  recognition.lang = "en-US";
+  recognition.interimResults = true;
+  recognition.continuous = false;
+  recognition.maxAlternatives = 1;
+
+  recognition.onstart = () => {
+    voiceListening = true;
+    setVoiceStatus("LISTENING");
+    setVoiceHint("Listening…");
+    if (voiceTimeoutId) clearTimeout(voiceTimeoutId);
+    voiceTimeoutId = setTimeout(() => {
+      try {
+        recognition.stop();
+      } catch {}
+    }, 5000);
+  };
+
+  recognition.onresult = (event) => {
+    let transcript = "";
+    for (let i = 0; i < event.results.length; i++) {
+      transcript += event.results[i][0].transcript;
+    }
+    transcript = transcript.trim();
+    setVoiceTranscript(transcript || "…");
+
+    const last = event.results[event.results.length - 1];
+    if (last && last.isFinal) {
+      handleFinalTranscript(transcript);
+      try {
+        recognition.stop();
+      } catch {}
+    }
+  };
+
+  recognition.onerror = (event) => {
+    voiceListening = false;
+    setVoiceStatus("ERROR");
+    setVoiceHint(event && event.error ? `Voice error: ${event.error}` : "Voice error.");
+  };
+
+  recognition.onend = () => {
+    voiceListening = false;
+    if (voiceTimeoutId) clearTimeout(voiceTimeoutId);
+    voiceTimeoutId = null;
+    lastVoiceAt = Date.now();
+    if (voiceEnabled && voiceState !== "ERROR") {
+      setVoiceStatus("READY");
+      setVoiceHint("Show LEFT open palm to trigger: “add text …”");
+    }
+  };
+
+  voiceEnabled = true;
+  setVoiceStatus("READY");
+  setVoiceHint("Show LEFT open palm to trigger: “add text …”");
+  if (voiceButton) voiceButton.disabled = true;
+}
+
+function handleFinalTranscript(transcript) {
+  const lower = transcript.toLowerCase();
+  if (!lower.startsWith("add text")) {
+    setVoiceHint("Say: add text <your words>");
+    return;
+  }
+  const text = transcript.slice(8).trim();
+  if (!text) {
+    setVoiceHint("Say: add text <your words>");
+    return;
+  }
+  emitCommand({ type: "ADD_TEXT", text, source: "voice" }, `ADD_TEXT ${text.slice(0, 40)}`);
+}
+
+function startListeningIfReady() {
+  if (!voiceEnabled || !recognition || voiceListening) return;
+  if (Date.now() - lastVoiceAt < 2000) return;
+  try {
+    recognition.start();
+  } catch (error) {
+    setVoiceStatus("ERROR");
+    setVoiceHint("Could not start voice recognition.");
+  }
+}
+
+if (voiceButton) {
+  voiceButton.addEventListener("click", () => {
+    if (voiceEnabled) return;
+    initVoice();
   });
 }
 
@@ -482,6 +604,31 @@ function computePalmCenter(landmarks) {
   return avg;
 }
 
+function updateVoiceTrigger(leftHand, now, currentMode) {
+  if (!voiceEnabled || !recognition) return;
+  if (currentMode !== "IDLE") {
+    leftOpenStart = 0;
+    leftOpenTriggered = false;
+    return;
+  }
+  if (!leftHand) {
+    leftOpenStart = 0;
+    leftOpenTriggered = false;
+    return;
+  }
+  const leftOpen = openPalmScore(leftHand) >= 0.75;
+  if (leftOpen) {
+    if (!leftOpenStart) leftOpenStart = now;
+    if (!leftOpenTriggered && now - leftOpenStart >= 500) {
+      startListeningIfReady();
+      leftOpenTriggered = true;
+    }
+  } else {
+    leftOpenStart = 0;
+    leftOpenTriggered = false;
+  }
+}
+
 function maxMinArea(landmarks) {
   let minX = Infinity;
   let minY = Infinity;
@@ -552,12 +699,26 @@ function handleGestures(landmarksList, handednessList, width, height) {
       .join(", ") || "—"
   );
 
-  if (!gesturesEnabled || handsCount === 0) {
+  if (handsCount === 0) {
     mode = "IDLE";
     setMode("IDLE");
     setBadgeActive(badgeOpenPalm, false);
     setBadgeActive(badgeIndexOnly, false);
     setBadgeActive(badgeZoom2H, false);
+    updateVoiceTrigger(null, now, mode);
+    return;
+  }
+
+  const leftIndex = handednessList.findIndex((h) => h && h[0] && h[0].categoryName === "Left");
+  const leftHand = leftIndex >= 0 ? landmarksList[leftIndex] : null;
+
+  if (!gesturesEnabled) {
+    mode = "IDLE";
+    setMode("IDLE");
+    setBadgeActive(badgeOpenPalm, false);
+    setBadgeActive(badgeIndexOnly, false);
+    setBadgeActive(badgeZoom2H, false);
+    updateVoiceTrigger(leftHand, now, mode);
     return;
   }
 
@@ -612,6 +773,7 @@ function handleGestures(landmarksList, handednessList, width, height) {
       if (!openA) {
         // Palm closed: exit without changing zoom.
         setZoomDebug("—", zoomS0 ? zoomS0.toFixed(3) : "—");
+        updateVoiceTrigger(leftHand, now, mode);
         return;
       }
       const s = maxMinArea(rightHand) || 1;
@@ -632,6 +794,7 @@ function handleGestures(landmarksList, handednessList, width, height) {
       }
       setZoomDebug(s.toFixed(3), zoomS0.toFixed(3));
     }
+    updateVoiceTrigger(leftHand, now, mode);
     return;
   }
 
@@ -674,10 +837,12 @@ function handleGestures(landmarksList, handednessList, width, height) {
         setMode("IDLE");
         panEngaged = false;
         inertialActive = true;
+        updateVoiceTrigger(leftHand, now, mode);
         return;
       }
 
       if (!twoFinger) {
+        updateVoiceTrigger(leftHand, now, mode);
         return;
       }
 
@@ -706,6 +871,7 @@ function handleGestures(landmarksList, handednessList, width, height) {
         }
       }
       setMode("PAN");
+      updateVoiceTrigger(leftHand, now, mode);
       return;
     }
   }
@@ -729,6 +895,7 @@ function handleGestures(landmarksList, handednessList, width, height) {
     }
   }
   setMode("IDLE");
+  updateVoiceTrigger(leftHand, now, mode);
 }
 
 async function startCamera() {

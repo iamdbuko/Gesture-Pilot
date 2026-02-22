@@ -1,4 +1,4 @@
-import type { StickerMessage, UiToMainMessage, MainToUiMessage } from "./shared/protocol";
+import type { AddTextMessage, StickerMessage, UiToMainMessage, MainToUiMessage } from "./shared/protocol";
 
 const UI_WIDTH = 320;
 const UI_HEIGHT = 360;
@@ -47,6 +47,28 @@ async function createStickerAtCenter(message: StickerMessage): Promise<void> {
   figma.currentPage.selection = [group];
 }
 
+async function createTextAtCenter(message: AddTextMessage): Promise<void> {
+  try {
+    await figma.loadFontAsync({ family: "Inter", style: "Regular" });
+  } catch {
+    setRelayError("Failed to load Inter Regular. Text not created.");
+    return;
+  }
+
+  const text = figma.createText();
+  text.fontName = { family: "Inter", style: "Regular" };
+  text.fontSize = 32;
+  text.fills = [{ type: "SOLID", color: { r: 0.12, g: 0.12, b: 0.14 } }];
+  text.textAutoResize = "WIDTH_AND_HEIGHT";
+  text.characters = message.text || "";
+
+  const center = figma.viewport.center;
+  text.x = center.x - text.width / 2;
+  text.y = center.y - text.height / 2;
+
+  figma.currentPage.selection = [text];
+}
+
 figma.ui.onmessage = async (message: UiToMainMessage) => {
   if (!message || typeof message !== "object" || !("type" in message)) {
     return;
@@ -83,6 +105,10 @@ figma.ui.onmessage = async (message: UiToMainMessage) => {
     }
     case "STICKER": {
       await createStickerAtCenter(message);
+      break;
+    }
+    case "ADD_TEXT": {
+      await createTextAtCenter(message);
       break;
     }
   }
@@ -155,8 +181,11 @@ async function relayConnect(baseUrl: string, sessionId: string, secret: string) 
   setRelayStatus(true, `Connected (${sessionId})`);
   setRelayError("—");
 
-  const ACTIVE_POLL_MS = 80;
-  const IDLE_POLL_MS = 500;
+  const ACTIVE_POLL_MS = 30;
+  const IDLE_POLL_MS = 300;
+  const BURST_POLL_MS = 20;
+  const BURST_WINDOW_MS = 800;
+  let burstUntil = 0;
 
   const poll = async (token: number) => {
     if (!relayState || !relayState.active || relayState.pollToken !== token) return;
@@ -177,12 +206,20 @@ async function relayConnect(baseUrl: string, sessionId: string, secret: string) 
       const commands = Array.isArray(data.commands) ? data.commands : [];
       if (commands.length > 0) {
         relayState.lastCommandAt = Date.now();
-        relayState.currentPollMs = ACTIVE_POLL_MS;
+        burstUntil = relayState.lastCommandAt + BURST_WINDOW_MS;
+        relayState.currentPollMs = BURST_POLL_MS;
         figma.ui.postMessage({ type: "RELAY_POLL", mode: "ACTIVE", intervalMs: relayState.currentPollMs });
       } else {
-        if (relayState.lastCommandAt && Date.now() - relayState.lastCommandAt > 2000) {
+        const now = Date.now();
+        if (relayState.lastCommandAt && now - relayState.lastCommandAt > 2000) {
           relayState.currentPollMs = IDLE_POLL_MS;
           figma.ui.postMessage({ type: "RELAY_POLL", mode: "IDLE", intervalMs: relayState.currentPollMs });
+        } else if (burstUntil && now < burstUntil) {
+          relayState.currentPollMs = BURST_POLL_MS;
+          figma.ui.postMessage({ type: "RELAY_POLL", mode: "ACTIVE", intervalMs: relayState.currentPollMs });
+        } else {
+          relayState.currentPollMs = ACTIVE_POLL_MS;
+          figma.ui.postMessage({ type: "RELAY_POLL", mode: "ACTIVE", intervalMs: relayState.currentPollMs });
         }
       }
       for (const cmd of commands) {
@@ -236,6 +273,11 @@ async function handleRelayCommand(command: any) {
     case "STICKER": {
       await createStickerAtCenter(command);
       setLastCommand(`STICKER ${command.kind}`);
+      break;
+    }
+    case "ADD_TEXT": {
+      await createTextAtCenter(command);
+      setLastCommand(`ADD_TEXT ${String(command.text || "").slice(0, 40)}`);
       break;
     }
   }
