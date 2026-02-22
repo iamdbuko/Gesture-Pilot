@@ -15,6 +15,8 @@ const lastCommand = document.getElementById("relay-last");
 const lastError = document.getElementById("relay-error");
 const mainBuild = document.getElementById("main-build");
 const pollMode = document.getElementById("poll-mode");
+const settingsToggle = document.getElementById("settings-toggle");
+const settingsPanel = document.getElementById("settings-panel");
 
 if (statusText) {
   statusText.textContent = "UI loaded";
@@ -61,3 +63,9 @@ window.onmessage = (event) => {
     if (pollMode) pollMode.textContent = `Polling: ${payload.mode} (${payload.intervalMs}ms)`;
   }
 };
+
+if (settingsToggle && settingsPanel) {
+  settingsToggle.addEventListener("click", () => {
+    settingsPanel.classList.toggle("open");
+  });
+}

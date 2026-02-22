@@ -26,6 +26,28 @@
         box-shadow: 0 6px 18px rgba(22, 22, 28, 0.08);
         margin-bottom: 12px;
       }
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 12px;
+      }
+      .icon-button {
+        width: 32px;
+        height: 32px;
+        border-radius: 10px;
+        border: none;
+        background: #e5e7ef;
+        color: #1c1c1f;
+        cursor: pointer;
+        font-size: 16px;
+      }
+      .settings {
+        display: none;
+      }
+      .settings.open {
+        display: block;
+      }
       .row {
         display: flex;
         gap: 8px;
@@ -77,30 +99,35 @@
     </style>
   </head>
   <body>
-    <h1>Gesture Pilot</h1>
+    <div class="topbar">
+      <h1>Gesture Pilot</h1>
+      <button id="settings-toggle" class="icon-button" aria-label="Settings">⚙️</button>
+    </div>
 
-    <div class="panel">
-      <label>Relay Base URL</label>
-      <input id="relay-url" type="text" placeholder="https://gesture-pilot-relay.vercel.app" value="https://gesture-pilot-relay.vercel.app" />
-      <div style="height: 8px;"></div>
-      <label>Session ID</label>
-      <input id="relay-session" type="text" placeholder="e.g. a1b2c3" />
-      <div style="height: 8px;"></div>
-      <label>Secret</label>
-      <input id="relay-secret" type="text" placeholder="e.g. 123abc..." />
-      <div class="row" style="margin-top: 8px;">
-        <button id="relay-connect">Connect</button>
-        <button id="relay-disconnect" class="secondary">Disconnect</button>
+    <div class="settings" id="settings-panel">
+      <div class="panel">
+        <label>Relay Base URL</label>
+        <input id="relay-url" type="text" placeholder="https://gesture-pilot-relay.vercel.app" value="https://gesture-pilot-relay.vercel.app" />
+        <div style="height: 8px;"></div>
+        <label>Session ID</label>
+        <input id="relay-session" type="text" placeholder="e.g. a1b2c3" />
+        <div style="height: 8px;"></div>
+        <label>Secret</label>
+        <input id="relay-secret" type="text" placeholder="e.g. 123abc..." />
+        <div class="row" style="margin-top: 8px;">
+          <button id="relay-connect">Connect</button>
+          <button id="relay-disconnect" class="secondary">Disconnect</button>
+        </div>
+        <div class="status" style="margin-top: 8px;">
+          <span class="dot" id="relay-dot"></span>
+          <span id="relay-status">Disconnected</span>
+        </div>
+        <p class="subtle" id="relay-last">Last command: —</p>
+        <p class="subtle" id="relay-error">Last error: —</p>
+        <p class="subtle" id="poll-mode">Polling: —</p>
+        <p class="subtle" id="build-stamp">Build: 2026-02-21-23:50</p>
+        <p class="subtle" id="main-build">Main: —</p>
       </div>
-      <div class="status" style="margin-top: 8px;">
-        <span class="dot" id="relay-dot"></span>
-        <span id="relay-status">Disconnected</span>
-      </div>
-      <p class="subtle" id="relay-last">Last command: —</p>
-      <p class="subtle" id="relay-error">Last error: —</p>
-      <p class="subtle" id="poll-mode">Polling: —</p>
-      <p class="subtle" id="build-stamp">Build: 2026-02-21-23:50</p>
-      <p class="subtle" id="main-build">Main: —</p>
     </div>
 
     <!-- UI_SCRIPT -->

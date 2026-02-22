@@ -10,6 +10,8 @@ const connText = document.getElementById("conn-text");
 const relayError = document.getElementById("relay-error");
 const relayLastPush = document.getElementById("relay-last-push");
 const wsStatus = document.getElementById("ws-status");
+const settingsToggle = document.getElementById("settings-toggle");
+const settingsPanel = document.getElementById("settings-panel");
 let connected = false;
 
 function setConnected(value) {
@@ -83,6 +85,7 @@ const gestureLast = document.getElementById("gesture-last");
 const badgeOpenPalm = document.getElementById("badge-openpalm");
 const badgeIndexOnly = document.getElementById("badge-indexonly");
 const badgeZoom2H = document.getElementById("badge-zoom2h");
+const badgeDebug = document.getElementById("badge-debug");
 const voiceButton = document.getElementById("enable-voice");
 const voiceStatus = document.getElementById("voice-status");
 const voiceHint = document.getElementById("voice-hint");
@@ -168,6 +171,15 @@ function setBadgeActive(el, active) {
   el.classList.toggle("active", !!active);
 }
 
+function updateBadgeDebug() {
+  if (!badgeDebug) return;
+  const badges = [
+    badgeOpenPalm?.classList.contains("active") ? "OpenPalm" : null,
+    badgeIndexOnly?.classList.contains("active") ? "TwoFingers" : null,
+    badgeZoom2H?.classList.contains("active") ? "ZoomPalm" : null,
+  ].filter(Boolean);
+  badgeDebug.textContent = `Badges: ${badges.length ? badges.join(", ") : "none"}`;
+}
 
 if (gestureToggle) {
   gesturesEnabled = gestureToggle.checked;
@@ -177,6 +189,11 @@ if (gestureToggle) {
   });
 }
 
+if (settingsToggle && settingsPanel) {
+  settingsToggle.addEventListener("click", () => {
+    settingsPanel.classList.toggle("open");
+  });
+}
 
 function initVoice() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -718,6 +735,7 @@ function handleGestures(landmarksList, handednessList, width, height) {
     setBadgeActive(badgeOpenPalm, false);
     setBadgeActive(badgeIndexOnly, false);
     setBadgeActive(badgeZoom2H, false);
+    updateBadgeDebug();
     updateVoiceTrigger(null, now, mode);
     return;
   }
@@ -731,6 +749,7 @@ function handleGestures(landmarksList, handednessList, width, height) {
     setBadgeActive(badgeOpenPalm, false);
     setBadgeActive(badgeIndexOnly, false);
     setBadgeActive(badgeZoom2H, false);
+    updateBadgeDebug();
     updateVoiceTrigger(leftHand, now, mode);
     return;
   }
@@ -747,6 +766,7 @@ function handleGestures(landmarksList, handednessList, width, height) {
   if (rightHand) {
     openA = openPalmScore(rightHand) >= 0.75;
     setBadgeActive(badgeOpenPalm, openA);
+    updateBadgeDebug();
     if (openA) {
       if (!zoomEnterAt) zoomEnterAt = now;
     } else {
@@ -774,6 +794,7 @@ function handleGestures(landmarksList, handednessList, width, height) {
       setMode("ZOOM");
     }
     setBadgeActive(badgeZoom2H, true);
+    updateBadgeDebug();
 
     if ((!rightHand || !openA) && now - modeSince >= 400 && zoomExitAt && now - zoomExitAt >= 150) {
       mode = "IDLE";
@@ -815,6 +836,7 @@ function handleGestures(landmarksList, handednessList, width, height) {
   if (rightHand) {
     const twoFinger = isTwoFingerGesture(rightHand);
     setBadgeActive(badgeIndexOnly, twoFinger);
+    updateBadgeDebug();
     if (twoFinger) {
       lastIndexSeenAt = now;
       if (!panEnterAt) panEnterAt = now;
@@ -895,6 +917,7 @@ function handleGestures(landmarksList, handednessList, width, height) {
   setZoomDebug("—", "—");
   setBadgeActive(badgeIndexOnly, false);
   setBadgeActive(badgeZoom2H, false);
+  updateBadgeDebug();
   if (inertialActive && !panEngaged) {
     // Apply inertia when pan stops.
     inertialVx *= 0.86;
