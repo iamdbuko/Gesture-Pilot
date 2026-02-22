@@ -965,9 +965,6 @@ function drawFrame() {
   const height = (canvas.height = video.videoHeight || canvas.height || 480);
 
   ctx.drawImage(video, 0, 0, width, height);
-  // Debug overlay marker to confirm canvas is visible.
-  ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
-  ctx.fillRect(8, 8, 6, 6);
 
   if (handLandmarker && video.currentTime !== lastVideoTime) {
     lastVideoTime = video.currentTime;
